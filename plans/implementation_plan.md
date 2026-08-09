@@ -1,12 +1,13 @@
-# Implementation Plan — Procedural Faction Strategy / Auto-Battle Wargame
+# Warwrought — Implementation Plan
 
-**Working title:** TBD  
-**Document status:** Implementation foundation and milestone plan  
-**Source design:** `dominions_like_gdd.md`  
-**Engine:** Godot 4.7.1 .NET  
-**Primary language:** C#  
-**Primary target:** Windows desktop  
-**Plan date:** 9 August 2026
+- **Project:** Warwrought
+- **Document status:** Implementation foundation and milestone plan
+- **Canonical location:** `/plans/implementation_plan.md`
+- **Source design:** `/DESIGN.md`
+- **Engine:** Godot 4.7.1 .NET/C#
+- **Renderer:** Forward+
+- **Primary target:** Windows desktop
+- **Plan date:** 9 August 2026
 
 ---
 
@@ -132,17 +133,17 @@ Recommended shape:
 ```text
 /
 ├── project.godot
-├── Game.csproj
-├── Game.sln
+├── Warwrought.csproj
+├── Warwrought.sln
 ├── export_presets.cfg
 ├── AGENTS.md
-├── README.md
+├── DESIGN.md
 ├── docs/
-│   ├── GDD.md
-│   ├── IMPLEMENTATION_PLAN.md
 │   ├── architecture/
 │   ├── decisions/
 │   └── milestones/
+├── plans/
+│   └── implementation_plan.md
 ├── src/
 │   ├── Core/
 │   ├── Content/
@@ -181,13 +182,13 @@ Recommended shape:
 │   ├── vfx/
 │   └── audio/
 ├── tests/
-│   └── Game.Tests/
+│   └── Warwrought.Tests/
 ├── scripts/
 └── artifacts/
     └── .gitkeep
 ```
 
-The production C# code remains part of the Godot project. A sibling `.NET` test project may reference `Game.csproj` for fast deterministic logic tests; it is not a second application or alternate game runtime.
+The production C# code remains part of the Godot project. A sibling `.NET` test project may reference `Warwrought.csproj` for fast deterministic logic tests; it is not a second application or alternate game runtime.
 
 ## 3.2 Responsibility boundaries
 
@@ -621,11 +622,11 @@ No game breadth belongs here.
 
 Tasks:
 
-- Create Godot 4.7.1 .NET project.
+- Create the Godot 4.7.1 .NET/C# project using the Forward+ renderer.
 - Target the .NET version expected by the installed Godot .NET editor.
 - Commit `project.godot`, `.csproj`, `.sln`, `.gitignore`, and `export_presets.cfg`.
-- Set a deterministic project name/identifier placeholder.
-- Set renderer appropriate for desktop 3D; start with Forward+ unless a concrete compatibility issue appears.
+- Set the project name and assembly identifier to `Warwrought`.
+- Use Forward+ as the desktop 3D renderer baseline. A renderer change requires an explicit design revision; do not substitute a compatibility renderer locally.
 - Configure window defaults suitable for desktop development.
 - Document exact Godot executable path resolution on Windows.
 - Record installed Godot and .NET versions in `docs/environment.md`.
@@ -694,7 +695,7 @@ Acceptance:
 
 ## M0.5 Fast .NET test project
 
-Create `tests/Game.Tests` using one mainstream .NET test framework already well supported by `dotnet test`.
+Create `tests/Warwrought.Tests` using one mainstream .NET test framework already well supported by `dotnet test`.
 
 Initial tests:
 
@@ -3090,7 +3091,7 @@ A deferred item may later become important. Its absence from the foundation is i
 
 If beginning from an empty repository, execute in this order rather than parallelizing too early:
 
-1. Create Godot 4.7.1 .NET project and commit text project state.
+1. Create the Godot 4.7.1 .NET/C# project with Forward+ and commit text project state.
 2. Prove `dotnet build`.
 3. Create `BootstrapLab.tscn` and command-line acceptance argument handling.
 4. Prove explicit log file + JSON report + intentional exit.
@@ -3157,7 +3158,7 @@ This matrix exists so reviewers can verify that the implementation sequence actu
 
 | Locked design requirement | Primary implementation proof |
 |---|---|
-| Godot 4.7.1 .NET + C# | M0 toolchain/build/export gate |
+| Godot 4.7.1 .NET/C# + Forward+ | M0 toolchain/build/export gate |
 | Province-based turn-based campaign | M4 campaign graph; M7 turn resolver |
 | Procedural province world | M4 graph/identity generation and map runtime |
 | Custom faction and lord | DG-A + M6 creators |

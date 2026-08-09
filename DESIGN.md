@@ -1,11 +1,13 @@
-# Game Design Document — Procedural Faction Strategy / Auto-Battle Wargame
+# Warwrought — Game Design Document
 
-**Working title:** TBD  
-**Document status:** Foundation GDD — standalone agent reference  
-**Date:** 9 August 2026  
-**Primary engine:** Godot 4.7.1 .NET  
-**Primary language:** C#  
-**Primary target:** Desktop PC, Windows first unless revised  
+- **Project:** Warwrought
+- **Document status:** Foundation GDD — standalone agent reference
+- **Date:** 9 August 2026
+- **Canonical location:** `/DESIGN.md`
+- **Companion implementation plan:** `/plans/implementation_plan.md`
+- **Engine:** Godot 4.7.1 .NET/C#
+- **Renderer:** Forward+
+- **Primary target:** Desktop PC, Windows first unless revised
 
 ---
 
@@ -1249,9 +1251,9 @@ Generated factions should feel intentional, not like random independent trait ro
 
 ## 19.1 Engine
 
-**LOCKED CURRENT CHOICE:** **Godot 4.7.1 .NET**.
+**LOCKED CURRENT CHOICE:** **Godot 4.7.1 .NET/C# with the Forward+ renderer**.
 
-Godot 4.7.1 is the current stable maintenance release as of this document date. The project should use the .NET build to support C#.
+Godot 4.7.1 is the current stable maintenance release as of this document date. The project uses the .NET build for C# and Forward+ as the desktop 2.5D renderer baseline.
 
 Primary reasons:
 
@@ -1718,8 +1720,8 @@ Preferred principle:
 
 An agent should treat the following as current project law unless the owner explicitly revises them:
 
-1. **Godot 4.7.1 .NET is the chosen engine.**
-2. **C# is the primary language.**
+1. **Godot 4.7.1 .NET/C# with the Forward+ renderer is the chosen engine configuration.**
+2. **C# is the primary project/game language.**
 3. **The strategic campaign is turn-based and province-based.**
 4. **The campaign map is procedurally generated and fundamentally a province graph.**
 5. **The player creates a custom faction and custom lord/god/leader.**
@@ -1755,7 +1757,6 @@ An agent should treat the following as current project law unless the owner expl
 
 These require future design work and should not be invented as if already decided:
 
-- final game title;
 - narrative/lore/theme;
 - exact faction-creation taxonomy and point budget;
 - exact unit stat model;

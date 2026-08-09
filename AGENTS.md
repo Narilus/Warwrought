@@ -5,7 +5,7 @@ This file defines the always-on operating rules for agents working in the Warwro
 ## 1. Project Identity
 
 - **Project:** Warwrought
-- **Engine:** Godot 4.7.1 .NET / C#
+- **Engine:** Godot 4.7.1 .NET/C#
 - **Renderer:** Forward+
 - **Primary target:** Windows desktop
 - **Local project root:** `D:\Dev\Projects\warwrought`
@@ -17,7 +17,7 @@ This file defines the always-on operating rules for agents working in the Warwro
 
 ### Installed Godot executables
 
-Use the pinned Godot 4.7.1 Mono build unless the project explicitly changes version:
+Use the pinned Godot 4.7.1 .NET/C# build with the Forward+ project configuration unless the project explicitly changes that locked decision. The installed executable filenames retain Godot's historical `mono` label:
 
 - **Editor / visible GUI:** `D:\Dev\Godot\Godot_v4.7.1\Godot_v4.7.1-stable_mono_win64.exe`
 - **Console / CLI:** `D:\Dev\Godot\Godot_v4.7.1\Godot_v4.7.1-stable_mono_win64_console.exe`
@@ -166,7 +166,7 @@ Do not treat a successful process exit code as sufficient evidence without inspe
 
 ### Current API accuracy
 
-Warwrought targets Godot 4.7.1 .NET. C# API names and usage may differ from GDScript examples and older Godot versions.
+Warwrought targets Godot 4.7.1 .NET/C# with Forward+. C# API names and usage may differ from GDScript examples and older Godot versions.
 
 If an exact engine API matters and the repository does not already demonstrate it, use the `researcher` agent or current official Godot 4.7 documentation. Do not build compatibility wrappers around an unverified remembered API.
 

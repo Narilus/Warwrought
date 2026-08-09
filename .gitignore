@@ -1,6 +1,7 @@
 # Godot generated state and platform-specific output
 /.godot/
 /android/
+*.cs.uid
 
 # .NET build output
 **/bin/

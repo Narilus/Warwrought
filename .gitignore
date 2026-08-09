@@ -1,3 +1,33 @@
-# Godot 4+ specific ignores
-.godot/
+# Godot generated state and platform-specific output
+/.godot/
 /android/
+
+# .NET build output
+**/bin/
+**/obj/
+
+# IDE/editor state
+/.vs/
+/.vscode/
+/.idea/
+*.user
+*.suo
+
+# Export, publish, and other local build output
+/build/
+/builds/
+/dist/
+/exports/
+/publish/
+
+# Local acceptance artifacts and logs. Keep only the directory marker tracked.
+/artifacts/*
+!/artifacts/.gitkeep
+*.log
+
+# Machine/editor metadata
+*.pidb
+*.pdb
+*.userprefs
+Thumbs.db
+.DS_Store

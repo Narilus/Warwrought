@@ -139,22 +139,127 @@ Use the `godot-project-operations` skill whenever building, running, accepting, 
 
 ### Current bootstrap state
 
-The repository is at the initial scaffold / pre-M0 stage. Not every M0 artifact or command exists yet. In particular, do not assume the final `.sln`, `.csproj`, export preset, test project, acceptance scripts, or production lab scenes exist until repository inspection proves they do.
+M0's build, test, production `BootstrapLab`, Windows export, and exported-player paths are established. Later milestone artifacts and commands remain provisional until their own tasks prove them.
 
-### Provisional command policy
+### Frozen M0 verification contract
 
-Before M0.7, official Godot/.NET command shapes may be used to establish the infrastructure, but they are **provisional**. M0 must empirically prove the exact repository commands.
+M0.4 corrective reproof has now proved the following direct sequence twice consecutively from fresh PowerShell process contexts, using fresh ignored `reproof-run-1` and `reproof-run-2` roots. This supersedes the initial frozen block, which independent review rejected because literal fresh-root execution reached export without creating `$runRoot` or `$runRoot\export`, and Godot failed with `ERROR: Prepare Template: The given export path doesn't exist.` The corrected sequence is run from the repository root with a new `reproof-run-N` root each time; it creates both required directories before any dependent command and retains direct command/build/test provenance. The only per-run substitution below is that artifact root:
 
-At M0.7, update this file with the exact tested commands for:
+```powershell
+$godot = 'D:\Dev\Godot\Godot_v4.7.1\Godot_v4.7.1-stable_mono_win64_console.exe'
+$runRoot = 'D:\Dev\Projects\warwrought\artifacts\local\m0.4\reproof-run-1'
 
-- C# build;
-- fast deterministic tests;
-- production scene acceptance;
-- Windows export;
-- exported-player smoke;
-- acceptance artifact/log locations.
+if (Test-Path -LiteralPath $runRoot) {
+    throw "Fresh run root already exists: $runRoot"
+}
+New-Item -ItemType Directory -Path $runRoot | Out-Null
+New-Item -ItemType Directory -Path "$runRoot\export" | Out-Null
 
-Once frozen, those exact commands become the default operating contract. Change them only through an explicit infrastructure task with evidence that the existing contract is genuinely insufficient.
+Start-Transcript -Path "$runRoot\command-transcript.log" -Force
+try {
+    $templatePaths = @(
+        'C:\Users\wblig\AppData\Roaming\Godot\export_templates\4.7.1.stable.mono\windows_debug_x86_64.exe',
+        'C:\Users\wblig\AppData\Roaming\Godot\export_templates\4.7.1.stable.mono\windows_release_x86_64.exe'
+    )
+    foreach ($templatePath in $templatePaths) {
+        if (-not (Test-Path -LiteralPath $templatePath -PathType Leaf)) {
+            throw "Required export template was not found: $templatePath"
+        }
+    }
+    'export_template_prerequisite=present'
+
+    dotnet build --nologo *> "$runRoot\dotnet-build.log"
+    $buildExitCode = $LASTEXITCODE
+    "dotnet_build_exit_code=$buildExitCode"
+    if ($buildExitCode -ne 0) {
+        throw "dotnet build failed with exit code $buildExitCode"
+    }
+
+    dotnet test tests\Warwrought.Tests\Warwrought.Tests.csproj --nologo *> "$runRoot\dotnet-test.log"
+    $testExitCode = $LASTEXITCODE
+    "dotnet_test_exit_code=$testExitCode"
+    if ($testExitCode -ne 0) {
+        throw "dotnet test failed with exit code $testExitCode"
+    }
+
+    & $godot --headless --path 'D:\Dev\Projects\warwrought' --scene 'res://scenes/Labs/BootstrapLab.tscn' --log-file "$runRoot\bootstrap.log" -- '--acceptance=bootstrap.m0' "--report=$runRoot\bootstrap.json"
+    $bootstrapExitCode = $LASTEXITCODE
+    "bootstrap_exit_code=$bootstrapExitCode"
+    if ($bootstrapExitCode -ne 0) {
+        throw "BootstrapLab acceptance failed with exit code $bootstrapExitCode"
+    }
+
+    pwsh -NoProfile -File scripts\verify-bootstraplab.ps1 -ReportPath "$runRoot\bootstrap.json" -LogPath "$runRoot\bootstrap.log"
+    $bootstrapVerifierExitCode = $LASTEXITCODE
+    "bootstrap_verifier_exit_code=$bootstrapVerifierExitCode"
+    if ($bootstrapVerifierExitCode -ne 0) {
+        throw "BootstrapLab verifier failed with exit code $bootstrapVerifierExitCode"
+    }
+
+    & $godot --headless --path 'D:\Dev\Projects\warwrought' --export-release 'Windows Desktop' "$runRoot\export\Warwrought.exe" *> "$runRoot\windows-export.log"
+    $exportExitCode = $LASTEXITCODE
+    "windows_export_exit_code=$exportExitCode"
+    if ($exportExitCode -ne 0) {
+        throw "Windows Desktop export failed with exit code $exportExitCode"
+    }
+
+    $exportExe = "$runRoot\export\Warwrought.exe"
+    $exportPck = "$runRoot\export\Warwrought.pck"
+    $managedRoot = "$runRoot\export\data_Warwrought_windows_x86_64"
+    $requiredExportFiles = @(
+        $exportExe,
+        $exportPck,
+        "$managedRoot\Warwrought.dll",
+        "$managedRoot\Warwrought.deps.json",
+        "$managedRoot\Warwrought.runtimeconfig.json",
+        "$managedRoot\GodotSharp.dll",
+        "$managedRoot\hostfxr.dll",
+        "$managedRoot\hostpolicy.dll"
+    )
+    foreach ($requiredExportFile in $requiredExportFiles) {
+        if (-not (Test-Path -LiteralPath $requiredExportFile -PathType Leaf)) {
+            throw "Required same-run export output was not found: $requiredExportFile"
+        }
+    }
+    "export_executable=$exportExe"
+    "export_pck=$exportPck"
+    "managed_output=$managedRoot"
+    "managed_dependency_file_count=$(@(Get-ChildItem -LiteralPath $managedRoot -File).Count)"
+
+    $player = Start-Process -FilePath $exportExe -ArgumentList @('--headless','--log-file',"$runRoot\player-smoke.log",'--','--acceptance=bootstrap.m0',"--report=$runRoot\player-smoke.json") -PassThru -Wait
+    $playerExitCode = $player.ExitCode
+    "player_executable=$exportExe"
+    "player_process_id=$($player.Id)"
+    "player_exit_code=$playerExitCode"
+    if ($playerExitCode -ne 0) {
+        throw "Exported player failed with exit code $playerExitCode"
+    }
+    if (-not (Test-Path -LiteralPath "$runRoot\player-smoke.json" -PathType Leaf)) {
+        throw "Exported player report was not finalized: $runRoot\player-smoke.json"
+    }
+    if (-not (Test-Path -LiteralPath "$runRoot\player-smoke.log" -PathType Leaf)) {
+        throw "Exported player log was not finalized: $runRoot\player-smoke.log"
+    }
+    'player_evidence_finalized=true'
+
+    pwsh -NoProfile -File scripts\verify-bootstraplab.ps1 -ReportPath "$runRoot\player-smoke.json" -LogPath "$runRoot\player-smoke.log"
+    $playerVerifierExitCode = $LASTEXITCODE
+    "player_verifier_exit_code=$playerVerifierExitCode"
+    if ($playerVerifierExitCode -ne 0) {
+        throw "Exported player verifier failed with exit code $playerVerifierExitCode"
+    }
+}
+finally {
+    Stop-Transcript
+}
+```
+
+The direct export must produce `export\Warwrought.exe`, the matching `export\Warwrought.pck`, and `export\data_Warwrought_windows_x86_64\` containing `Warwrought.dll`, `Warwrought.deps.json`, `Warwrought.runtimeconfig.json`, and the managed dependencies. The block checks the two pinned templates, same-run export outputs, and managed dependency files before launch. `Start-Process -PassThru -Wait` must finish before checking the player report/log or running the second verifier; the block records the exact executable path, exit result, and finalized evidence before that verifier. Confirm the player command targets that newly exported executable (not Godot, `dotnet`, or a surrogate) and require process exit `0`. `command-transcript.log`, `dotnet-build.log`, and `dotnet-test.log` retain per-run command/build/test provenance under the ignored run root.
+
+The required pinned templates are `C:\Users\wblig\AppData\Roaming\Godot\export_templates\4.7.1.stable.mono\windows_debug_x86_64.exe` and `windows_release_x86_64.exe`. Runtime reports/logs live under the ignored `artifacts\local\m0.4\reproof-run-N\` root. Inspect every report and log: require the runtime-owned `BootstrapLab`/`bootstrap.m0` identity, `passed=true`, `unexpectedErrors=0`, and no unexpected errors, exceptions, assertions, missing resources/nodes, invalid references, or repeated error floods. Triage warnings; the existing `all_resources` export observation may include ignored local artifacts and must not be expanded into export filtering.
+
+Do not replace or redesign this direct contract for feature convenience. Change it only through an explicit infrastructure task with evidence that the existing contract is genuinely insufficient.
+The existing `scripts\verify-bootstraplab.ps1` is the single transparent verifier; its failure semantics for missing, invalid, failed, or unexpected-error report/log evidence remain required.
 
 ### Production runtime evidence
 

@@ -1,6 +1,6 @@
 # M0 — Project Foundation & Verification Contract
 
-- **Status:** Planned
+- **Status:** Complete; M0.4 corrective reproof passed
 - **Source milestone:** `/plans/implementation_plan.md` §9 (M0)
 - **Depends on:** The current baseline scaffold only
 - **Completes before:** Any M1 implementation work
@@ -18,9 +18,11 @@ This milestone is infrastructure for the product runtime, not an excuse to produ
 | 1 | [M0.1 Project foundation](M0.1_project-foundation.md) | **READY** | None | Establish the pinned Godot/.NET project, window/export configuration, ignore policy, solution, and buildable scaffold. |
 | 2 | [M0.2 BootstrapLab runtime contract](M0.2_bootstraplab-runtime-contract.md) | **READY** | M0.1 accepted | Establish the Section 3 source layout and prove a real C#-backed Godot scene, acceptance report/logging behaviour, and fast test path. |
 | 3 | [M0.3 Windows export and player smoke](M0.3_windows-export-smoke.md) | **READY** | M0.2 accepted | Export the production scene and prove the exported player emits its own runtime evidence. |
-| 4 | [M0.4 Freeze and repeat the verification contract](M0.4_freeze-verification-contract.md) | Planned | M0.1–M0.3 accepted | Run the complete command sequence twice and freeze only the empirically proven commands in `AGENTS.md`. |
+| 4 | [M0.4 Freeze and repeat the verification contract](M0.4_freeze-verification-contract.md) | **COMPLETE — corrective reproof passed** | M0.1–M0.3 accepted | Run the complete command sequence twice and freeze only the empirically proven commands in `AGENTS.md`. |
 
-M0.1–M0.3 are currently executable. A later task becomes **READY** only after its listed dependencies have credible acceptance evidence and Planner confirms its task packet remains accurate.
+M0.1–M0.3 have credible acceptance evidence. M0.4 corrected and re-proved its frozen contract, so M0 is complete; no M1 implementation work was started.
+
+The independent review rejected the initial M0.4 gate because a literal fresh-root execution reached export without creating `$runRoot` and `$runRoot\export`; Godot reported `ERROR: Prepare Template: The given export path doesn't exist.` The prior two-run count is discarded. The corrective repair is limited to the direct `AGENTS.md` block: it creates both directories inside the block and captures simple per-run command/build/test provenance without changing production code, scenes, verifier, preset, runtime architecture, or verification design. Corrective evidence uses fresh ignored `artifacts/local/m0.4/reproof-run-1/` and `reproof-run-2/` roots.
 
 ## Milestone-wide constraints
 
@@ -38,7 +40,7 @@ M0.1–M0.3 are currently executable. A later task becomes **READY** only after 
 
 M0 passes only when a fresh terminal can run the documented build, test, production `BootstrapLab` acceptance, Windows export, and exported-player smoke sequence **twice consecutively**, without manual editor action, using the pinned toolchain. Each run must produce its own expected acceptance JSON and explicit logs; both reports must pass and the logs must contain no unexpected errors, exceptions, assertions, missing-resource failures, invalid-node/resource failures, or error floods.
 
-The exact successful commands, required export-template prerequisite, artifact locations, and clean-log inspection rule are then recorded in `AGENTS.md`. Required evidence is the two-run command transcript, `dotnet test` results, BootstrapLab editor/scene reports and logs, export logs, and exported-player reports and logs. Runtime artifacts are inspected evidence, not committed source.
+The exact successful commands, required export-template prerequisite, artifact locations, and clean-log inspection rule are recorded in `AGENTS.md` after the corrected literal fresh-root sequence passed twice consecutively. The initial M0.4 freeze omitted artifact-directory creation; the corrected reproof supersedes its `run-1/` and `run-2/` evidence. Successful evidence is under ignored `artifacts/local/m0.4/reproof-run-1/` and `reproof-run-2/`: command transcripts, `dotnet build`/`dotnet test` output and exit results, BootstrapLab scene reports and logs, export logs and outputs, and exported-player reports and logs. Runtime artifacts are inspected evidence, not committed source.
 
 ## Non-goals for M0
 

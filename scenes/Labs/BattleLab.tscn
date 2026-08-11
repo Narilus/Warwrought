@@ -1,0 +1,153 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://src/Bootstrap/BattleLab.cs" id="1_battlelab"]
+[ext_resource type="Script" path="res://src/Presentation/Battle/BattlePlaybackController.cs" id="2_playback"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ground"]
+roughness = 0.92
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_ground"]
+material = SubResource("StandardMaterial3D_ground")
+size = Vector2(60, 52)
+subdivide_width = 1
+subdivide_depth = 1
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_contact"]
+roughness = 0.85
+
+[sub_resource type="BoxMesh" id="BoxMesh_contact"]
+material = SubResource("StandardMaterial3D_contact")
+size = Vector3(60, 0.04, 0.08)
+
+[sub_resource type="Environment" id="Environment_battle"]
+background_mode = 1
+background_color = Color(0.025, 0.043, 0.075, 1)
+ambient_light_source = 3
+ambient_light_color = Color(0.48, 0.55, 0.68, 1)
+ambient_light_energy = 0.72
+tonemap_mode = 2
+
+[node name="BattleLab" type="Node3D"]
+script = ExtResource("1_battlelab")
+
+[node name="BattlefieldRoot" type="Node3D" parent="."]
+
+[node name="TerrainRoot" type="Node3D" parent="BattlefieldRoot"]
+
+[node name="Ground" type="MeshInstance3D" parent="BattlefieldRoot/TerrainRoot"]
+mesh = SubResource("PlaneMesh_ground")
+
+[node name="ContactLine" type="MeshInstance3D" parent="BattlefieldRoot/TerrainRoot"]
+position = Vector3(0, 0.025, 0)
+mesh = SubResource("BoxMesh_contact")
+
+[node name="UnitRoot" type="Node3D" parent="BattlefieldRoot"]
+
+[node name="RemainsRoot" type="Node3D" parent="BattlefieldRoot"]
+
+[node name="EffectsRoot" type="Node3D" parent="BattlefieldRoot"]
+
+[node name="CameraRig" type="Node3D" parent="BattlefieldRoot"]
+
+[node name="Camera3D" type="Camera3D" parent="BattlefieldRoot/CameraRig"]
+position = Vector3(0, 30, 34)
+rotation_degrees = Vector3(-48, 0, 0)
+projection = 1
+size = 58.0
+current = true
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-52, -28, 0)
+light_color = Color(1, 0.92, 0.78, 1)
+light_energy = 1.15
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_battle")
+
+[node name="BattlePlaybackController" type="Node" parent="."]
+script = ExtResource("2_playback")
+
+[node name="BattleHUD" type="CanvasLayer" parent="."]
+layer = 10
+
+[node name="Background" type="ColorRect" parent="BattleHUD"]
+mouse_filter = 2
+color = Color(0.018, 0.029, 0.055, 0.18)
+
+[node name="Panel" type="PanelContainer" parent="BattleHUD"]
+
+[node name="Content" type="VBoxContainer" parent="BattleHUD/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="BattleHUD/Panel/Content"]
+layout_mode = 2
+text = "BATTLELAB  //  M1 DETERMINISTIC MELEE PLAYBACK"
+horizontal_alignment = 1
+
+[node name="Status" type="Label" parent="BattleHUD/Panel/Content"]
+layout_mode = 2
+text = "Preparing committed transcript..."
+horizontal_alignment = 1
+
+[node name="Result" type="Label" parent="BattleHUD/Panel/Content"]
+layout_mode = 2
+text = "Result: pending — transcript playback has not reached BattleEnded."
+horizontal_alignment = 1
+
+[node name="Counters" type="Label" parent="BattleHUD/Panel/Content"]
+layout_mode = 2
+text = "Views 0  •  keyframes 0  •  attacks 0  •  damage 0  •  deaths 0  •  remains 0  •  routs 0"
+horizontal_alignment = 1
+
+[node name="Controls" type="HBoxContainer" parent="BattleHUD/Panel/Content"]
+layout_mode = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="ResetButton" type="Button" parent="BattleHUD/Panel/Content/Controls"]
+custom_minimum_size = Vector2(120, 30)
+layout_mode = 2
+text = "Reset"
+
+[node name="PauseButton" type="Button" parent="BattleHUD/Panel/Content/Controls"]
+custom_minimum_size = Vector2(120, 30)
+layout_mode = 2
+text = "Pause"
+
+[node name="PlayButton" type="Button" parent="BattleHUD/Panel/Content/Controls"]
+custom_minimum_size = Vector2(120, 30)
+layout_mode = 2
+text = "Play / Resume"
+
+[node name="Speed1Button" type="Button" parent="BattleHUD/Panel/Content/Controls"]
+custom_minimum_size = Vector2(95, 30)
+layout_mode = 2
+text = "1x"
+
+[node name="Speed2Button" type="Button" parent="BattleHUD/Panel/Content/Controls"]
+custom_minimum_size = Vector2(95, 30)
+layout_mode = 2
+text = "2x"
+
+[node name="Legend" type="PanelContainer" parent="BattleHUD"]
+offset_left = 1012.0
+
+[node name="Content" type="VBoxContainer" parent="BattleHUD/Legend"]
+layout_mode = 2
+
+[node name="SideA" type="Label" parent="BattleHUD/Legend/Content"]
+layout_mode = 2
+text = "SIDE A  •  ember infantry"
+horizontal_alignment = 1
+
+[node name="SideB" type="Label" parent="BattleHUD/Legend/Content"]
+layout_mode = 2
+text = "SIDE B  •  azure infantry"
+horizontal_alignment = 1
+
+[node name="Hint" type="Label" parent="BattleHUD/Legend/Content"]
+layout_mode = 2
+text = "billboard views • red hit flash • remains"
+horizontal_alignment = 1

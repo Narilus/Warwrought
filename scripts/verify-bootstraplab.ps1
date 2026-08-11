@@ -10,6 +10,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $failures = [System.Collections.Generic.List[string]]::new()
+$verifiedScenario = $null
+$verifiedScene = $null
 
 function Add-Failure {
     param([Parameter(Mandatory = $true)][string]$Reason)
@@ -65,12 +67,37 @@ else {
             }
         }
 
-        if ((Has-Property $report 'scenario') -and $report.scenario -ne 'bootstrap.m0') {
-            Add-Failure "Runtime report scenario is not bootstrap.m0: $($report.scenario)"
+        if (Has-Property $report 'scenario') {
+            switch ([string]$report.scenario) {
+                'bootstrap.m0' {
+                    $verifiedScenario = 'bootstrap.m0'
+                    $verifiedScene = 'BootstrapLab'
+                }
+                'battlelab.m1.melee' {
+                    $verifiedScenario = 'battlelab.m1.melee'
+                    $verifiedScene = 'BattleLab'
+                }
+                default {
+                    Add-Failure "Runtime report scenario is unsupported: $($report.scenario)"
+                }
+            }
         }
 
-        if ((Has-Property $report 'scene') -and $report.scene -ne 'BootstrapLab') {
-            Add-Failure "Runtime report scene is not BootstrapLab: $($report.scene)"
+        if ((Has-Property $report 'scene') -and $null -ne $verifiedScene -and $report.scene -ne $verifiedScene) {
+            Add-Failure "Runtime report scene '$($report.scene)' does not match scenario '$verifiedScenario' (expected '$verifiedScene')."
+        }
+
+        if ((Has-Property $report 'scenePath') -and $null -ne $verifiedScene) {
+            $expectedScenePath = if ($verifiedScene -eq 'BootstrapLab') {
+                'res://scenes/Labs/BootstrapLab.tscn'
+            }
+            else {
+                'res://scenes/Labs/BattleLab.tscn'
+            }
+
+            if ($report.scenePath -ne $expectedScenePath) {
+                Add-Failure "Runtime report scenePath '$($report.scenePath)' does not match expected '$expectedScenePath'."
+            }
         }
 
         if ((Has-Property $report 'passed') -and (-not [bool]$report.passed)) {
@@ -125,7 +152,7 @@ else {
 }
 
 if ($failures.Count -gt 0) {
-    Write-Host 'BootstrapLab verification FAILED.'
+    Write-Host 'Shared runtime verification FAILED.'
     foreach ($failure in $failures) {
         Write-Host " - $failure"
     }
@@ -133,5 +160,10 @@ if ($failures.Count -gt 0) {
     exit 1
 }
 
-Write-Host "BootstrapLab verification PASSED: report '$ReportPath' and log '$LogPath' are clean."
+if ($verifiedScene -eq 'BattleLab') {
+    Write-Host "BattleLab verification PASSED: report '$ReportPath' and log '$LogPath' are clean."
+}
+else {
+    Write-Host "BootstrapLab verification PASSED: report '$ReportPath' and log '$LogPath' are clean."
+}
 exit 0

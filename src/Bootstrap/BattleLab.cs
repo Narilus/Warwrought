@@ -27,11 +27,16 @@ public partial class BattleLab : Node3D
     private BattleResolution? _resolution;
     private BattleResult? _skipResult;
     private BattlePlaybackController? _playbackController;
+    private BattlefieldTerrainView? _terrainView;
+    private BattleCameraRig? _cameraRig;
+    private BattlefieldDefinition? _battlefieldDefinition;
+    private BattlefieldPresentationProjector? _presentationProjector;
     private double _headlessResolutionElapsedMilliseconds;
     private int _unexpectedErrors;
     private string? _failureCategory;
     private string? _failureMessage;
     private bool _reportWritten;
+    private bool _cameraControlsObserved;
 
     public override void _Ready()
     {
@@ -41,8 +46,8 @@ public partial class BattleLab : Node3D
             if (!_arguments.IsAcceptanceRequested)
             {
                 InitializeProductionBattle();
-                _playbackController!.Play();
-                GD.Print("BattleLab ready: maintained production transcript playback scene, normal launch mode.");
+            _playbackController!.Play();
+                GD.Print($"BattleLab ready: maintained production transcript playback scene, normal launch mode, profile={_battlefieldDefinition?.BattlefieldId.Value}, controls=WASD/wheel/R.");
                 return;
             }
 
@@ -101,6 +106,7 @@ public partial class BattleLab : Node3D
             _playbackController.SetSpeed(1.0);
             _playbackController.SetSpeed(2.0);
             _playbackController.SetSpeed(8.0);
+            ObserveCameraControls();
         }
         catch (Exception exception)
         {
@@ -129,20 +135,32 @@ public partial class BattleLab : Node3D
         _headlessResolutionElapsedMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
         _skipResult = _committedBattle.SkipToResult();
         _resolution = _committedBattle.WatchResolution;
+        _battlefieldDefinition = SelectBattlefield(_arguments?.BattlefieldProfileId);
+        _presentationProjector = new BattlefieldPresentationProjector(_battlefieldDefinition);
+        _terrainView = GetNode<BattlefieldTerrainView>("BattlefieldRoot/TerrainRoot");
+        _terrainView.Configure(_presentationProjector);
+        _cameraRig = GetNode<BattleCameraRig>("BattlefieldRoot/CameraRig");
+        _cameraRig.Configure(_battlefieldDefinition);
         _playbackController = GetNode<BattlePlaybackController>("BattlePlaybackController");
-        _playbackController.Initialize(_resolution);
+        _playbackController.Initialize(_resolution, _presentationProjector);
         BindControlSurface(_playbackController);
+        BindCameraControlSurface(_cameraRig);
+        UpdateTerrainHud();
     }
 
     private void ValidateProductionSceneStructure()
     {
         _ = GetNode<Node3D>("BattlefieldRoot");
         _ = GetNode<Node3D>("BattlefieldRoot/TerrainRoot");
+        _ = GetNode<BattlefieldTerrainView>("BattlefieldRoot/TerrainRoot");
         _ = GetNode<MeshInstance3D>("BattlefieldRoot/TerrainRoot/Ground");
+        _ = GetNode<Node3D>("BattlefieldRoot/TerrainRoot/FoliageRoot");
+        _ = GetNode<Node3D>("BattlefieldRoot/TerrainRoot/PropsRoot");
         _ = GetNode<Node3D>("BattlefieldRoot/UnitRoot");
         _ = GetNode<Node3D>("BattlefieldRoot/RemainsRoot");
         _ = GetNode<Node3D>("BattlefieldRoot/EffectsRoot");
         _ = GetNode<Node3D>("BattlefieldRoot/CameraRig");
+        _ = GetNode<BattleCameraRig>("BattlefieldRoot/CameraRig");
         _ = GetNode<Camera3D>("BattlefieldRoot/CameraRig/Camera3D");
         _ = GetNode<BattlePlaybackController>("BattlePlaybackController");
         _ = GetNode<CanvasLayer>("BattleHUD");
@@ -152,6 +170,12 @@ public partial class BattleLab : Node3D
         _ = GetNode<Button>("BattleHUD/Panel/Content/Controls/PlayButton");
         _ = GetNode<Button>("BattleHUD/Panel/Content/Controls/Speed1Button");
         _ = GetNode<Button>("BattleHUD/Panel/Content/Controls/Speed2Button");
+        _ = GetNode<Button>("BattleHUD/Panel/Content/Controls/PanLeftButton");
+        _ = GetNode<Button>("BattleHUD/Panel/Content/Controls/PanRightButton");
+        _ = GetNode<Button>("BattleHUD/Panel/Content/Controls/ZoomInButton");
+        _ = GetNode<Button>("BattleHUD/Panel/Content/Controls/ZoomOutButton");
+        _ = GetNode<Button>("BattleHUD/Panel/Content/Controls/CameraResetButton");
+        _ = GetNode<Label>("BattleHUD/Panel/Content/Terrain");
     }
 
     private void BindControlSurface(BattlePlaybackController controller)
@@ -161,6 +185,55 @@ public partial class BattleLab : Node3D
         GetNode<Button>("BattleHUD/Panel/Content/Controls/PlayButton").Pressed += controller.Play;
         GetNode<Button>("BattleHUD/Panel/Content/Controls/Speed1Button").Pressed += () => controller.SetSpeed(1.0);
         GetNode<Button>("BattleHUD/Panel/Content/Controls/Speed2Button").Pressed += () => controller.SetSpeed(2.0);
+    }
+
+    private void BindCameraControlSurface(BattleCameraRig cameraRig)
+    {
+        GetNode<Button>("BattleHUD/Panel/Content/Controls/PanLeftButton").Pressed += () => cameraRig.Pan(-BattleCameraRig.PanStepWorldUnits, 0.0f);
+        GetNode<Button>("BattleHUD/Panel/Content/Controls/PanRightButton").Pressed += () => cameraRig.Pan(BattleCameraRig.PanStepWorldUnits, 0.0f);
+        GetNode<Button>("BattleHUD/Panel/Content/Controls/ZoomInButton").Pressed += () => cameraRig.ZoomBy(-4.0f);
+        GetNode<Button>("BattleHUD/Panel/Content/Controls/ZoomOutButton").Pressed += () => cameraRig.ZoomBy(4.0f);
+        GetNode<Button>("BattleHUD/Panel/Content/Controls/CameraResetButton").Pressed += cameraRig.ResetToBattleFraming;
+    }
+
+    private void ObserveCameraControls()
+    {
+        if (_cameraRig is null || _resolution is null)
+        {
+            throw new InvalidOperationException("BattleLab camera observation requires the configured camera and retained resolution.");
+        }
+
+        var originalDigest = _resolution.Result.CanonicalDigest;
+        var originalTranscriptDigest = _resolution.Transcript.CanonicalDigest;
+        _cameraRig.Pan(BattleCameraRig.PanStepWorldUnits, 0.0f);
+        _cameraRig.ZoomBy(-4.0f);
+        _cameraRig.ResetToBattleFraming();
+        _cameraControlsObserved = _cameraRig.IsOrthographic &&
+                                  _cameraRig.CurrentOrthographicSize > 0.0f &&
+                                  _resolution.Result.CanonicalDigest == originalDigest &&
+                                  _resolution.Transcript.CanonicalDigest == originalTranscriptDigest;
+        if (!_cameraControlsObserved)
+        {
+            throw new InvalidOperationException("BattleLab camera controls changed authoritative resolution identity or failed to restore a valid orthographic frame.");
+        }
+    }
+
+    private static BattlefieldDefinition SelectBattlefield(string? profileId)
+    {
+        return string.Equals(profileId, BattleLabArguments.BroadHighlandProfile, StringComparison.Ordinal)
+            ? BattlefieldFixtureFactory.CreateM2BroadHighlandProfile()
+            : BattlefieldFixtureFactory.CreateM2OpenMeadowProfile();
+    }
+
+    private void UpdateTerrainHud()
+    {
+        if (_battlefieldDefinition is null || _terrainView is null)
+        {
+            return;
+        }
+
+        GetNode<Label>("BattleHUD/Panel/Content/Terrain").Text =
+            $"M2 TERRAIN  //  {_battlefieldDefinition.BattlefieldId.Value}  //  mesh {_terrainView.MeshTriangleCount} facets  //  foliage {_terrainView.FoliagePlacementCount}  //  pan/zoom/reset: WASD, wheel, R";
     }
 
     private void CompleteAcceptance(BattleLabArguments arguments, bool passed, int processExitCode)
@@ -299,6 +372,23 @@ public partial class BattleLab : Node3D
             NominalTranscriptDurationMilliseconds = controller?.NominalTranscriptDurationMilliseconds ?? 0.0,
             ResultShown = controller?.ResultShown ?? false,
             PlaybackCompleted = controller?.PlaybackCompleted ?? false,
+            BattlefieldProfile = _battlefieldDefinition?.BattlefieldId.Value ?? string.Empty,
+            BattlefieldSeed = _battlefieldDefinition?.Seed ?? 0,
+            BattlefieldDigest = _battlefieldDefinition?.CanonicalDigest ?? string.Empty,
+            TerrainMeshTriangleCount = _terrainView?.MeshTriangleCount ?? 0,
+            TerrainMeshVertexCount = _terrainView?.MeshVertexCount ?? 0,
+            TerrainMeshSamplerAgreement = _terrainView?.MeshSamplerAgreement ?? false,
+            FoliagePlacementCount = _terrainView?.FoliagePlacementCount ?? 0,
+            FoliageDigest = _terrainView?.FoliageDigest ?? string.Empty,
+            PropCount = _terrainView?.PropCount ?? 0,
+            ProjectedUnitCount = controller?.UnitProjectionCount ?? 0,
+            ProjectedRemainsCount = controller?.RemainsProjectionCount ?? 0,
+            ProjectedEffectCount = controller?.EffectProjectionCount ?? 0,
+            CameraOrthographic = _cameraRig?.IsOrthographic ?? false,
+            CameraPanOperations = _cameraRig?.PanOperations ?? 0,
+            CameraZoomOperations = _cameraRig?.ZoomOperations ?? 0,
+            CameraResetOperations = _cameraRig?.ResetOperations ?? 0,
+            CameraControlsObserved = _cameraControlsObserved,
             UnexpectedErrors = _unexpectedErrors,
             Passed = passed && _unexpectedErrors == 0,
             FailureCategory = passed && _unexpectedErrors == 0 ? null : _failureCategory ?? "AcceptanceFailure",

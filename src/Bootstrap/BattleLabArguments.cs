@@ -11,17 +11,23 @@ namespace Warwrought.Bootstrap;
 public sealed class BattleLabArguments
 {
     public const string AcceptanceScenario = "battlelab.m1.melee";
+    public const string OpenMeadowScenario = "battlelab.m2.open-meadow";
+    public const string BroadHighlandScenario = "battlelab.m2.broad-highland";
+    public const string OpenMeadowProfile = "battlefield.m2.open-meadow";
+    public const string BroadHighlandProfile = "battlefield.m2.broad-highland";
 
     private BattleLabArguments(
         bool isAcceptanceRequested,
         bool isValid,
         string? scenarioId,
+        string? battlefieldProfileId,
         string? reportPath,
         string? validationError)
     {
         IsAcceptanceRequested = isAcceptanceRequested;
         IsValid = isValid;
         ScenarioId = scenarioId;
+        BattlefieldProfileId = battlefieldProfileId;
         ReportPath = reportPath;
         ValidationError = validationError;
     }
@@ -34,6 +40,8 @@ public sealed class BattleLabArguments
 
     public string? ScenarioId { get; }
 
+    public string? BattlefieldProfileId { get; }
+
     public string? ReportPath { get; }
 
     public string? ValidationError { get; }
@@ -45,8 +53,10 @@ public sealed class BattleLabArguments
         var errors = new List<string>();
         string? scenarioId = null;
         string? reportPath = null;
+        string? battlefieldProfileId = null;
         var sawAcceptanceOption = false;
         var sawReportOption = false;
+        var sawProfileOption = false;
 
         for (var index = 0; index < userArguments.Count; index++)
         {
@@ -75,6 +85,18 @@ public sealed class BattleLabArguments
                 continue;
             }
 
+            if (TryReadOption(userArguments, ref index, argument, "--battlefield-profile", out var profileValue))
+            {
+                if (battlefieldProfileId is not null)
+                {
+                    errors.Add("--battlefield-profile was supplied more than once.");
+                }
+
+                battlefieldProfileId = profileValue;
+                sawProfileOption = true;
+                continue;
+            }
+
             errors.Add(string.IsNullOrWhiteSpace(argument)
                 ? "An empty user argument is not valid."
                 : $"Unknown BattleLab user argument '{argument}'.");
@@ -83,16 +105,44 @@ public sealed class BattleLabArguments
         var acceptanceRequested = userArguments.Count > 0;
         if (!acceptanceRequested)
         {
-            return new BattleLabArguments(false, true, null, null, null);
+            return new BattleLabArguments(false, true, null, null, null, null);
+        }
+
+        if (!sawAcceptanceOption && !sawReportOption && sawProfileOption && errors.Count == 0)
+        {
+            return new BattleLabArguments(false, true, null, battlefieldProfileId, null, null);
         }
 
         if (!sawAcceptanceOption || string.IsNullOrWhiteSpace(scenarioId))
         {
             errors.Add("Acceptance mode requires --acceptance=battlelab.m1.melee.");
         }
-        else if (!string.Equals(scenarioId, AcceptanceScenario, StringComparison.Ordinal))
+        else if (!string.Equals(scenarioId, AcceptanceScenario, StringComparison.Ordinal) &&
+                 !string.Equals(scenarioId, OpenMeadowScenario, StringComparison.Ordinal) &&
+                 !string.Equals(scenarioId, BroadHighlandScenario, StringComparison.Ordinal))
         {
-            errors.Add($"Unsupported acceptance scenario '{scenarioId}'. Expected '{AcceptanceScenario}'.");
+            errors.Add($"Unsupported acceptance scenario '{scenarioId}'. Expected '{AcceptanceScenario}', '{OpenMeadowScenario}', or '{BroadHighlandScenario}'.");
+        }
+
+        var isM2Scenario = string.Equals(scenarioId, OpenMeadowScenario, StringComparison.Ordinal) ||
+                           string.Equals(scenarioId, BroadHighlandScenario, StringComparison.Ordinal);
+        if (string.IsNullOrWhiteSpace(battlefieldProfileId))
+        {
+            battlefieldProfileId = string.Equals(scenarioId, BroadHighlandScenario, StringComparison.Ordinal)
+                ? BroadHighlandProfile
+                : OpenMeadowProfile;
+        }
+        else if (!string.Equals(battlefieldProfileId, OpenMeadowProfile, StringComparison.Ordinal) &&
+                 !string.Equals(battlefieldProfileId, BroadHighlandProfile, StringComparison.Ordinal))
+        {
+            errors.Add($"Unsupported battlefield profile '{battlefieldProfileId}'. Expected '{OpenMeadowProfile}' or '{BroadHighlandProfile}'.");
+        }
+
+        if (isM2Scenario &&
+            ((string.Equals(scenarioId, OpenMeadowScenario, StringComparison.Ordinal) && !string.Equals(battlefieldProfileId, OpenMeadowProfile, StringComparison.Ordinal)) ||
+             (string.Equals(scenarioId, BroadHighlandScenario, StringComparison.Ordinal) && !string.Equals(battlefieldProfileId, BroadHighlandProfile, StringComparison.Ordinal))))
+        {
+            errors.Add($"M2 terrain scenario '{scenarioId}' requires its matching --battlefield-profile.");
         }
 
         if (!sawReportOption || string.IsNullOrWhiteSpace(reportPath))
@@ -115,6 +165,7 @@ public sealed class BattleLabArguments
             true,
             errors.Count == 0,
             scenarioId,
+            battlefieldProfileId,
             reportPath,
             errors.Count == 0 ? null : string.Join(" ", errors));
     }

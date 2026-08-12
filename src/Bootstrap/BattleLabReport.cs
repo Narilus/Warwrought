@@ -112,6 +112,40 @@ public sealed class BattleLabReport
 
     public bool PlaybackCompleted { get; init; }
 
+    public string BattlefieldProfile { get; init; } = string.Empty;
+
+    public ulong BattlefieldSeed { get; init; }
+
+    public string BattlefieldDigest { get; init; } = string.Empty;
+
+    public int TerrainMeshTriangleCount { get; init; }
+
+    public int TerrainMeshVertexCount { get; init; }
+
+    public bool TerrainMeshSamplerAgreement { get; init; }
+
+    public int FoliagePlacementCount { get; init; }
+
+    public string FoliageDigest { get; init; } = string.Empty;
+
+    public int PropCount { get; init; }
+
+    public int ProjectedUnitCount { get; init; }
+
+    public int ProjectedRemainsCount { get; init; }
+
+    public int ProjectedEffectCount { get; init; }
+
+    public bool CameraOrthographic { get; init; }
+
+    public int CameraPanOperations { get; init; }
+
+    public int CameraZoomOperations { get; init; }
+
+    public int CameraResetOperations { get; init; }
+
+    public bool CameraControlsObserved { get; init; }
+
     public int UnexpectedErrors { get; init; }
 
     public bool Passed { get; init; }
@@ -254,6 +288,37 @@ public sealed class BattleLabReport
         if (!SkipWatchEquivalent)
         {
             errors.Add("Skip and watch authoritative outcomes are not exactly equal.");
+        }
+
+        if (string.Equals(Scenario, BattleLabArguments.OpenMeadowScenario, StringComparison.Ordinal) ||
+            string.Equals(Scenario, BattleLabArguments.BroadHighlandScenario, StringComparison.Ordinal))
+        {
+            AddRequired(errors, BattlefieldProfile, nameof(BattlefieldProfile));
+            AddRequired(errors, BattlefieldDigest, nameof(BattlefieldDigest));
+            if (BattlefieldSeed == 0)
+            {
+                errors.Add("BattlefieldSeed must be non-zero for an M2 terrain acceptance.");
+            }
+
+            if (TerrainMeshTriangleCount <= 0 || TerrainMeshVertexCount <= 0 || !TerrainMeshSamplerAgreement)
+            {
+                errors.Add("M2 terrain acceptance requires a non-empty mesh whose vertices agree with the sampler.");
+            }
+
+            if (FoliagePlacementCount <= 0 || string.IsNullOrWhiteSpace(FoliageDigest) || PropCount < 0)
+            {
+                errors.Add("M2 terrain acceptance requires deterministic foliage/prop evidence.");
+            }
+
+            if (ProjectedUnitCount <= 0 || ProjectedRemainsCount <= 0 || ProjectedEffectCount <= 0)
+            {
+                errors.Add("M2 terrain acceptance requires sampler-derived unit, remains, and effect projections.");
+            }
+
+            if (!CameraOrthographic || CameraPanOperations <= 0 || CameraZoomOperations <= 0 || CameraResetOperations <= 0 || !CameraControlsObserved)
+            {
+                errors.Add("M2 terrain acceptance requires observed orthographic pan, zoom, and reset controls.");
+            }
         }
 
         if (!string.Equals(SkipResult, Result, StringComparison.Ordinal) ||

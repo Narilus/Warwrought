@@ -94,6 +94,12 @@ public sealed class M1BattlePlaybackTests
     {
         var valid = BattleLabArguments.Parse(
             new[] { "--acceptance=battlelab.m1.melee", "--report=artifacts/local/m1.3/report.json" });
+        var meadow = BattleLabArguments.Parse(
+            new[] { "--acceptance=battlelab.m2.open-meadow", "--report=artifacts/local/m2.2/report.json" });
+        var highland = BattleLabArguments.Parse(
+            new[] { "--acceptance=battlelab.m2.broad-highland", "--battlefield-profile=battlefield.m2.broad-highland", "--report=artifacts/local/m2.2/report.json" });
+        var normalHighland = BattleLabArguments.Parse(
+            new[] { "--battlefield-profile=battlefield.m2.broad-highland" });
         var wrongScenario = BattleLabArguments.Parse(
             new[] { "--acceptance=battlelab.m1.bad", "--report=artifacts/local/m1.3/report.json" });
         var unknownOption = BattleLabArguments.Parse(
@@ -103,6 +109,13 @@ public sealed class M1BattlePlaybackTests
 
         Assert.True(valid.IsAcceptanceMode);
         Assert.Equal(BattleLabArguments.AcceptanceScenario, valid.ScenarioId);
+        Assert.True(meadow.IsAcceptanceMode);
+        Assert.Equal(BattleLabArguments.OpenMeadowProfile, meadow.BattlefieldProfileId);
+        Assert.True(highland.IsAcceptanceMode);
+        Assert.Equal(BattleLabArguments.BroadHighlandProfile, highland.BattlefieldProfileId);
+        Assert.True(normalHighland.IsValid);
+        Assert.False(normalHighland.IsAcceptanceRequested);
+        Assert.Equal(BattleLabArguments.BroadHighlandProfile, normalHighland.BattlefieldProfileId);
         Assert.False(wrongScenario.IsValid);
         Assert.Contains("Unsupported acceptance scenario", wrongScenario.ValidationError, StringComparison.Ordinal);
         Assert.False(unknownOption.IsValid);

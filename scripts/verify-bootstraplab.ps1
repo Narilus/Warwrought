@@ -77,6 +77,14 @@ else {
                     $verifiedScenario = 'battlelab.m1.melee'
                     $verifiedScene = 'BattleLab'
                 }
+                'battlelab.m2.open-meadow' {
+                    $verifiedScenario = 'battlelab.m2.open-meadow'
+                    $verifiedScene = 'BattleLab'
+                }
+                'battlelab.m2.broad-highland' {
+                    $verifiedScenario = 'battlelab.m2.broad-highland'
+                    $verifiedScene = 'BattleLab'
+                }
                 default {
                     Add-Failure "Runtime report scenario is unsupported: $($report.scenario)"
                 }
@@ -118,7 +126,9 @@ else {
             }
         }
 
-        if ($verifiedScenario -eq 'battlelab.m1.melee') {
+        if ($verifiedScenario -eq 'battlelab.m1.melee' -or
+            $verifiedScenario -eq 'battlelab.m2.open-meadow' -or
+            $verifiedScenario -eq 'battlelab.m2.broad-highland') {
             $battlelabRequiredProperties = @(
                 'battleId',
                 'seed',
@@ -165,6 +175,56 @@ else {
                 watchedResultDigest = '7faa2ec40c0830f317f4c87296c2e54c27d6f43def9b18f92d113834e982da1c'
                 skipResult = 'SideAWin'
                 watchedResult = 'SideAWin'
+            }
+
+            if ($verifiedScenario -eq 'battlelab.m2.open-meadow' -or $verifiedScenario -eq 'battlelab.m2.broad-highland') {
+                $m2RequiredProperties = @(
+                    'battlefieldProfile',
+                    'battlefieldSeed',
+                    'battlefieldDigest',
+                    'terrainMeshTriangleCount',
+                    'terrainMeshVertexCount',
+                    'terrainMeshSamplerAgreement',
+                    'foliagePlacementCount',
+                    'foliageDigest',
+                    'propCount',
+                    'projectedUnitCount',
+                    'projectedRemainsCount',
+                    'projectedEffectCount',
+                    'cameraOrthographic',
+                    'cameraPanOperations',
+                    'cameraZoomOperations',
+                    'cameraResetOperations',
+                    'cameraControlsObserved'
+                )
+                foreach ($requiredProperty in $m2RequiredProperties) {
+                    if (-not (Has-Property $report $requiredProperty)) {
+                        Add-Failure "M2 BattleLab runtime report is missing $requiredProperty."
+                    }
+                }
+
+                $expectedProfile = if ($verifiedScenario -eq 'battlelab.m2.open-meadow') { 'battlefield.m2.open-meadow' } else { 'battlefield.m2.broad-highland' }
+                $expectedSeed = if ($verifiedScenario -eq 'battlelab.m2.open-meadow') { [ulong]5562593449599061847 } else { [ulong]5562587969321979460 }
+                $expectedDigest = if ($verifiedScenario -eq 'battlelab.m2.open-meadow') { '567f72c3d9e754722839fb8f1fb034fea7d9f647bc66690a36416ed0e7dc5443' } else { '5973015037208b1d09e4d50be3e0353b3bf200dd06fd1a1ccdf77ec4f691326f' }
+                foreach ($expectedPair in @(
+                    @('battlefieldProfile', $expectedProfile),
+                    @('battlefieldSeed', $expectedSeed),
+                    @('battlefieldDigest', $expectedDigest)
+                )) {
+                    if ((Has-Property $report $expectedPair[0]) -and [string]$report.($expectedPair[0]) -ne [string]$expectedPair[1]) {
+                        Add-Failure "M2 BattleLab runtime report $($expectedPair[0]) '$($report.($expectedPair[0]))' does not match expected '$($expectedPair[1])'."
+                    }
+                }
+
+                if ((Has-Property $report 'terrainMeshTriangleCount') -and [int]$report.terrainMeshTriangleCount -le 0) { Add-Failure 'M2 terrain mesh triangle count must be positive.' }
+                if ((Has-Property $report 'terrainMeshVertexCount') -and [int]$report.terrainMeshVertexCount -le 0) { Add-Failure 'M2 terrain mesh vertex count must be positive.' }
+                if ((Has-Property $report 'terrainMeshSamplerAgreement') -and $report.terrainMeshSamplerAgreement -ne $true) { Add-Failure 'M2 terrain mesh/sampler agreement must be true.' }
+                if ((Has-Property $report 'foliagePlacementCount') -and [int]$report.foliagePlacementCount -le 0) { Add-Failure 'M2 foliage placement count must be positive.' }
+                if ((Has-Property $report 'projectedUnitCount') -and [int]$report.projectedUnitCount -le 0) { Add-Failure 'M2 projected unit count must be positive.' }
+                if ((Has-Property $report 'projectedRemainsCount') -and [int]$report.projectedRemainsCount -le 0) { Add-Failure 'M2 projected remains count must be positive.' }
+                if ((Has-Property $report 'projectedEffectCount') -and [int]$report.projectedEffectCount -le 0) { Add-Failure 'M2 projected effect count must be positive.' }
+                if ((Has-Property $report 'cameraOrthographic') -and $report.cameraOrthographic -ne $true) { Add-Failure 'M2 camera must report orthographic projection.' }
+                if ((Has-Property $report 'cameraControlsObserved') -and $report.cameraControlsObserved -ne $true) { Add-Failure 'M2 camera controls were not observed.' }
             }
 
             foreach ($expectedProperty in $expectedBattleLabValues.Keys) {

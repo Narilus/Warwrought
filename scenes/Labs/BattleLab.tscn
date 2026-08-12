@@ -1,9 +1,12 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://src/Bootstrap/BattleLab.cs" id="1_battlelab"]
 [ext_resource type="Script" path="res://src/Presentation/Battle/BattlePlaybackController.cs" id="2_playback"]
+[ext_resource type="Script" path="res://src/Presentation/Battle/BattlefieldTerrainView.cs" id="3_terrain"]
+[ext_resource type="Script" path="res://src/Presentation/Battle/BattleCameraRig.cs" id="4_camera"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ground"]
+albedo_color = Color(0.26, 0.43, 0.28, 1)
 roughness = 0.92
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_ground"]
@@ -33,6 +36,7 @@ script = ExtResource("1_battlelab")
 [node name="BattlefieldRoot" type="Node3D" parent="."]
 
 [node name="TerrainRoot" type="Node3D" parent="BattlefieldRoot"]
+script = ExtResource("3_terrain")
 
 [node name="Ground" type="MeshInstance3D" parent="BattlefieldRoot/TerrainRoot"]
 mesh = SubResource("PlaneMesh_ground")
@@ -41,6 +45,10 @@ mesh = SubResource("PlaneMesh_ground")
 position = Vector3(0, 0.025, 0)
 mesh = SubResource("BoxMesh_contact")
 
+[node name="FoliageRoot" type="Node3D" parent="BattlefieldRoot/TerrainRoot"]
+
+[node name="PropsRoot" type="Node3D" parent="BattlefieldRoot/TerrainRoot"]
+
 [node name="UnitRoot" type="Node3D" parent="BattlefieldRoot"]
 
 [node name="RemainsRoot" type="Node3D" parent="BattlefieldRoot"]
@@ -48,12 +56,13 @@ mesh = SubResource("BoxMesh_contact")
 [node name="EffectsRoot" type="Node3D" parent="BattlefieldRoot"]
 
 [node name="CameraRig" type="Node3D" parent="BattlefieldRoot"]
+script = ExtResource("4_camera")
 
 [node name="Camera3D" type="Camera3D" parent="BattlefieldRoot/CameraRig"]
-position = Vector3(0, 30, 34)
+position = Vector3(0, 27, 31)
 rotation_degrees = Vector3(-48, 0, 0)
 projection = 1
-size = 58.0
+size = 52.0
 current = true
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
@@ -101,6 +110,11 @@ layout_mode = 2
 text = "Views 0  •  keyframes 0  •  attacks 0  •  damage 0  •  deaths 0  •  remains 0  •  routs 0"
 horizontal_alignment = 1
 
+[node name="Terrain" type="Label" parent="BattleHUD/Panel/Content"]
+layout_mode = 2
+text = "M2 terrain loading..."
+horizontal_alignment = 1
+
 [node name="Controls" type="HBoxContainer" parent="BattleHUD/Panel/Content"]
 layout_mode = 2
 theme_override_constants/separation = 8
@@ -130,6 +144,31 @@ text = "1x"
 custom_minimum_size = Vector2(95, 30)
 layout_mode = 2
 text = "2x"
+
+[node name="PanLeftButton" type="Button" parent="BattleHUD/Panel/Content/Controls"]
+custom_minimum_size = Vector2(86, 30)
+layout_mode = 2
+text = "Pan ◀"
+
+[node name="PanRightButton" type="Button" parent="BattleHUD/Panel/Content/Controls"]
+custom_minimum_size = Vector2(86, 30)
+layout_mode = 2
+text = "Pan ▶"
+
+[node name="ZoomInButton" type="Button" parent="BattleHUD/Panel/Content/Controls"]
+custom_minimum_size = Vector2(86, 30)
+layout_mode = 2
+text = "Zoom +"
+
+[node name="ZoomOutButton" type="Button" parent="BattleHUD/Panel/Content/Controls"]
+custom_minimum_size = Vector2(86, 30)
+layout_mode = 2
+text = "Zoom -"
+
+[node name="CameraResetButton" type="Button" parent="BattleHUD/Panel/Content/Controls"]
+custom_minimum_size = Vector2(86, 30)
+layout_mode = 2
+text = "Frame"
 
 [node name="Legend" type="PanelContainer" parent="BattleHUD"]
 offset_left = 1012.0

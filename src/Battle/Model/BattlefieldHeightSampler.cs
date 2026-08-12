@@ -64,6 +64,38 @@ public sealed class BattlefieldHeightSampler
 
     public BattlefieldHeightSample Sample(SimPosition position) => Sample(position.X, position.Z);
 
+    /// <summary>
+    /// Returns the exact committed sample at one regular-grid index. Presentation mesh builders
+    /// use this narrow sampler operation so mesh vertex heights cannot drift from the definition.
+    /// </summary>
+    public BattlefieldHeightSample SampleGrid(int xIndex, int zIndex)
+    {
+        ValidateSampleIndex(xIndex, zIndex);
+        var x = GridCoordinateUnits(_definition.Bounds.MinX, _definition.Bounds.MaxX, xIndex, _definition.Resolution.SampleCountX);
+        var z = GridCoordinateUnits(_definition.Bounds.MinZ, _definition.Bounds.MaxZ, zIndex, _definition.Resolution.SampleCountZ);
+        var roundedX = checked((int)Math.Round(x, MidpointRounding.AwayFromZero));
+        var roundedZ = checked((int)Math.Round(z, MidpointRounding.AwayFromZero));
+        return new BattlefieldHeightSample(
+            roundedX,
+            roundedZ,
+            roundedX,
+            roundedZ,
+            _definition.GetHeightSample(xIndex, zIndex),
+            _definition.GetTerrainRegionSample(xIndex, zIndex));
+    }
+
+    public double GridXUnits(int xIndex)
+    {
+        ValidateXSampleIndex(xIndex);
+        return GridCoordinateUnits(_definition.Bounds.MinX, _definition.Bounds.MaxX, xIndex, _definition.Resolution.SampleCountX);
+    }
+
+    public double GridZUnits(int zIndex)
+    {
+        ValidateZSampleIndex(zIndex);
+        return GridCoordinateUnits(_definition.Bounds.MinZ, _definition.Bounds.MaxZ, zIndex, _definition.Resolution.SampleCountZ);
+    }
+
     public BattlefieldHeightSample Sample(int x, int z)
     {
         var sampledX = ClampToBounds(x, _definition.Bounds.MinX, _definition.Bounds.MaxX);
@@ -101,6 +133,33 @@ public sealed class BattlefieldHeightSampler
         }
 
         return coordinate > maximum ? maximum : coordinate;
+    }
+
+    private void ValidateSampleIndex(int xIndex, int zIndex)
+    {
+        ValidateXSampleIndex(xIndex);
+        ValidateZSampleIndex(zIndex);
+    }
+
+    private void ValidateXSampleIndex(int xIndex)
+    {
+        if (xIndex < 0 || xIndex >= _definition.Resolution.SampleCountX)
+        {
+            throw new ArgumentOutOfRangeException(nameof(xIndex), xIndex, "Height-field X sample index is outside the committed resolution.");
+        }
+    }
+
+    private void ValidateZSampleIndex(int zIndex)
+    {
+        if (zIndex < 0 || zIndex >= _definition.Resolution.SampleCountZ)
+        {
+            throw new ArgumentOutOfRangeException(nameof(zIndex), zIndex, "Height-field Z sample index is outside the committed resolution.");
+        }
+    }
+
+    private static double GridCoordinateUnits(int minimum, int maximum, int index, int sampleCount)
+    {
+        return minimum + (((double)maximum - minimum) * index / (sampleCount - 1));
     }
 
     private static AxisLocation Locate(int coordinate, int minimum, int maximum, int sampleCount)

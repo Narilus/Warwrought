@@ -25,7 +25,6 @@ public partial class BattlePlaybackController : Node
     private const double DeathDurationSeconds = 0.42;
     private const double EffectDurationSeconds = 0.16;
     private const double StatusMessageDurationSeconds = 0.48;
-    private const float WorldUnitsPerSimulationMetre = 1.0f / 1_000.0f;
 
     private readonly Dictionary<string, BattleUnitView> _unitViews = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Sprite3D> _remainsViews = new(StringComparer.Ordinal);
@@ -34,6 +33,7 @@ public partial class BattlePlaybackController : Node
 
     private BattleResolution? _resolution;
     private BattleTranscriptPlayback? _playback;
+    private BattlefieldPresentationProjector? _projector;
     private Node3D? _unitRoot;
     private Node3D? _remainsRoot;
     private Node3D? _effectsRoot;
@@ -84,6 +84,14 @@ public partial class BattlePlaybackController : Node
 
     public bool ResultShown => _resultShown;
 
+    public BattlefieldPresentationProjector Projector => _projector ?? throw new InvalidOperationException("BattlePlaybackController has not been initialized.");
+
+    public int UnitProjectionCount => _projector?.GetProjectionCount(BattlefieldProjectionPurpose.Unit) ?? 0;
+
+    public int RemainsProjectionCount => _projector?.GetProjectionCount(BattlefieldProjectionPurpose.Remains) ?? 0;
+
+    public int EffectProjectionCount => _projector?.GetProjectionCount(BattlefieldProjectionPurpose.Effect) ?? 0;
+
     /// <summary>
     /// The retained resolution identity once the authoritative BattleEnded event has been
     /// presented. The result is exposed from this handoff, never reconstructed from views or HUD
@@ -127,15 +135,17 @@ public partial class BattlePlaybackController : Node
     /// source-controlled placeholder textures are resolved here and missing dependencies throw
     /// instead of being acceptance-created.
     /// </summary>
-    public void Initialize(BattleResolution resolution)
+    public void Initialize(BattleResolution resolution, BattlefieldPresentationProjector projector)
     {
         ArgumentNullException.ThrowIfNull(resolution);
+        ArgumentNullException.ThrowIfNull(projector);
         if (_initialized)
         {
             throw new InvalidOperationException("BattlePlaybackController cannot be initialized twice.");
         }
 
         _resolution = resolution;
+        _projector = projector;
         _unitRoot = GetNode<Node3D>("../BattlefieldRoot/UnitRoot");
         _remainsRoot = GetNode<Node3D>("../BattlefieldRoot/RemainsRoot");
         _effectsRoot = GetNode<Node3D>("../BattlefieldRoot/EffectsRoot");
@@ -285,7 +295,7 @@ public partial class BattlePlaybackController : Node
                     Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
                     PixelSize = 0.012f,
                     Modulate = factionColor,
-                    Position = ToWorldPosition(member.Position, 0.88f),
+                    Position = Projector.Project(member.Position, BattlefieldPresentationProjector.UnitVerticalOffset, BattlefieldProjectionPurpose.Unit),
                 };
                 _unitRoot!.AddChild(sprite);
                 var view = new BattleUnitView(member.UnitId, keyframe.SideId, keyframe.SquadId, sprite, factionColor);
@@ -425,7 +435,7 @@ public partial class BattlePlaybackController : Node
         view.FallRotationRadians = view.SideId.Value == "side.a" ? -1.25f : 1.25f;
         view.FlashRemainingSeconds = FlashDurationSeconds;
         SetRecentStatus("DEATH — fall then remains");
-        SpawnEffect(view.Sprite.Position, new Color(1.0f, 0.12f, 0.08f, 1.0f), 0.36f);
+        SpawnEffect(GetEventWorldPosition(@event), new Color(1.0f, 0.12f, 0.08f, 1.0f), 0.36f);
     }
 
     private void PresentRout(BattleSemanticEvent @event)
@@ -467,7 +477,7 @@ public partial class BattlePlaybackController : Node
         foreach (var view in _unitViews.Values)
         {
             var sample = Playback.SampleMemberPosition(view.UnitId, exactTick);
-            var position = ToWorldPosition(sample.X, sample.Z, 0.88f);
+            var position = Projector.Project(sample.X, sample.Z, BattlefieldPresentationProjector.UnitVerticalOffset, BattlefieldProjectionPurpose.Unit);
 
             if (view.BumpRemainingSeconds > 0.0 && !view.IsDeadPresentation)
             {
@@ -528,6 +538,7 @@ public partial class BattlePlaybackController : Node
 
     private void SpawnRemains(BattleUnitView view)
     {
+        var currentSample = Playback.SampleMemberPosition(view.UnitId, Playback.Clock.CurrentTickExact);
         var remains = new Sprite3D
         {
             Name = $"Remains_{_remainsViews.Count:000}",
@@ -535,7 +546,11 @@ public partial class BattlePlaybackController : Node
             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
             PixelSize = 0.014f,
             Modulate = view.FactionColor,
-            Position = new Vector3(view.Sprite.Position.X, 0.16f, view.Sprite.Position.Z),
+            Position = Projector.Project(
+                currentSample.X,
+                currentSample.Z,
+                BattlefieldPresentationProjector.RemainsVerticalOffset,
+                BattlefieldProjectionPurpose.Remains),
         };
         _remainsRoot!.AddChild(remains);
         _remainsViews.Add(view.UnitId.Value, remains);
@@ -552,7 +567,7 @@ public partial class BattlePlaybackController : Node
             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
             PixelSize = pixelScale * 0.012f,
             Modulate = color,
-            Position = new Vector3(position.X, Math.Max(0.35f, position.Y), position.Z),
+            Position = position,
         };
         _effectsRoot!.AddChild(effect);
         _effects.Add(new EffectView(effect, EffectDurationSeconds));
@@ -576,28 +591,27 @@ public partial class BattlePlaybackController : Node
     {
         if (@event.Position.HasValue)
         {
-            return ToWorldPosition(@event.Position.Value, 0.9f);
+            return Projector.Project(
+                @event.Position.Value,
+                BattlefieldPresentationProjector.EffectVerticalOffset,
+                BattlefieldProjectionPurpose.Effect);
         }
 
         if (@event.SourceUnitId.HasValue && _unitViews.TryGetValue(@event.SourceUnitId.Value.Value, out var source))
         {
-            return source.Sprite.Position;
+            var sample = Playback.SampleMemberPosition(source.UnitId, Playback.Clock.CurrentTickExact);
+            return Projector.Project(
+                sample.X,
+                sample.Z,
+                BattlefieldPresentationProjector.EffectVerticalOffset,
+                BattlefieldProjectionPurpose.Effect);
         }
 
-        return Vector3.Zero;
-    }
-
-    private static Vector3 ToWorldPosition(SimPosition position, float height)
-    {
-        return ToWorldPosition(position.X, position.Z, height);
-    }
-
-    private static Vector3 ToWorldPosition(double x, double z, float height)
-    {
-        return new Vector3(
-            (float)(x * WorldUnitsPerSimulationMetre),
-            height,
-            (float)(z * WorldUnitsPerSimulationMetre));
+        var center = Projector.Definition.Bounds.Center;
+        return Projector.Project(
+            center,
+            BattlefieldPresentationProjector.EffectVerticalOffset,
+            BattlefieldProjectionPurpose.Effect);
     }
 
     private void UpdateHud()

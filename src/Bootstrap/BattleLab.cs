@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -22,8 +23,11 @@ public partial class BattleLab : Node3D
 
     private BattleLabArguments? _arguments;
     private BattleDefinition? _definition;
+    private CommittedBattleResolution? _committedBattle;
     private BattleResolution? _resolution;
+    private BattleResult? _skipResult;
     private BattlePlaybackController? _playbackController;
+    private double _headlessResolutionElapsedMilliseconds;
     private int _unexpectedErrors;
     private string? _failureCategory;
     private string? _failureMessage;
@@ -117,9 +121,14 @@ public partial class BattleLab : Node3D
 
         _definition = committedDefinition;
 
-        // This is intentionally the only M1.2 resolution call in the production BattleLab path.
-        // The immutable pair is retained and passed unchanged to transcript playback.
-        _resolution = AuthoritativeBattleResolver.Resolve(_definition);
+        // Commit owns the one authoritative resolver call. Skip consumes the stored result before
+        // playback initialization; watch receives the exact same retained resolution identity.
+        var stopwatch = Stopwatch.StartNew();
+        _committedBattle = CommittedBattleResolution.Commit(_definition);
+        stopwatch.Stop();
+        _headlessResolutionElapsedMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
+        _skipResult = _committedBattle.SkipToResult();
+        _resolution = _committedBattle.WatchResolution;
         _playbackController = GetNode<BattlePlaybackController>("BattlePlaybackController");
         _playbackController.Initialize(_resolution);
         BindControlSurface(_playbackController);
@@ -233,6 +242,15 @@ public partial class BattleLab : Node3D
         var transcript = resolution?.Transcript;
         var controller = _playbackController;
         var definition = _definition;
+        var watchedResult = controller?.PresentedResult;
+        var watchedResolution = controller?.PresentedResolution;
+        var resolutionIdentityShared = _committedBattle is not null &&
+                                       watchedResolution is not null &&
+                                       ReferenceEquals(_committedBattle.Resolution, watchedResolution);
+        var skipWatchEquivalent = _skipResult is not null &&
+                                  watchedResult is not null &&
+                                  resolutionIdentityShared &&
+                                  _skipResult.IsExactlyEqualTo(watchedResult);
 
         return new BattleLabReport
         {
@@ -251,7 +269,13 @@ public partial class BattleLab : Node3D
             TranscriptDigest = transcript?.CanonicalDigest ?? string.Empty,
             ResultDigest = result?.CanonicalDigest ?? string.Empty,
             Digest = result?.CanonicalDigest ?? string.Empty,
+            SkipResultDigest = _skipResult?.CanonicalDigest ?? string.Empty,
+            WatchedResultDigest = watchedResult?.CanonicalDigest ?? string.Empty,
             Result = result?.ResultType.ToString() ?? string.Empty,
+            SkipResult = _skipResult?.ResultType.ToString() ?? string.Empty,
+            WatchedResult = watchedResult?.ResultType.ToString() ?? string.Empty,
+            SkipWatchEquivalent = skipWatchEquivalent,
+            ResolutionIdentityShared = resolutionIdentityShared,
             WinnerSideId = result?.WinnerSideId?.Value,
             TerminalTick = result?.TerminalTick.Value ?? 0,
             SurvivorCount = result?.Survivors.Count ?? 0,
@@ -271,6 +295,8 @@ public partial class BattleLab : Node3D
             RemainsSpawned = controller?.RemainsSpawned ?? 0,
             RoutedFormationsShown = controller?.RoutedFormationsShown ?? 0,
             ControlTransitions = controller?.ControlTransitions ?? 0,
+            HeadlessResolutionElapsedMilliseconds = _headlessResolutionElapsedMilliseconds,
+            NominalTranscriptDurationMilliseconds = controller?.NominalTranscriptDurationMilliseconds ?? 0.0,
             ResultShown = controller?.ResultShown ?? false,
             PlaybackCompleted = controller?.PlaybackCompleted ?? false,
             UnexpectedErrors = _unexpectedErrors,

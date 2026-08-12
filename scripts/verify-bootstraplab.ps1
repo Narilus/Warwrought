@@ -117,6 +117,87 @@ else {
                 Add-Failure "Runtime report unexpectedErrors is not an integer: $($report.unexpectedErrors)"
             }
         }
+
+        if ($verifiedScenario -eq 'battlelab.m1.melee') {
+            $battlelabRequiredProperties = @(
+                'battleId',
+                'seed',
+                'simulationVersion',
+                'authoritativeInputDigest',
+                'transcriptDigest',
+                'resultDigest',
+                'digest',
+                'result',
+                'terminalTick',
+                'survivorCount',
+                'casualtyCount',
+                'retreatedUnitCount',
+                'skipResultDigest',
+                'watchedResultDigest',
+                'skipResult',
+                'watchedResult',
+                'skipWatchEquivalent',
+                'resolutionIdentityShared',
+                'headlessResolutionElapsedMilliseconds',
+                'nominalTranscriptDurationMilliseconds'
+            )
+
+            foreach ($requiredProperty in $battlelabRequiredProperties) {
+                if (-not (Has-Property $report $requiredProperty)) {
+                    Add-Failure "BattleLab runtime report is missing $requiredProperty."
+                }
+            }
+
+            $expectedBattleLabValues = @{
+                battleId = 'battle.m1.melee.fixture'
+                seed = 82741
+                simulationVersion = '1.0'
+                authoritativeInputDigest = '65ff279dac01cc31305336485af41cb595c37137edd25e04753aa5c62ec84787'
+                transcriptDigest = '75dc2d6f0dda9fc71c364a5c265f1c640ce7bc949435f7522dc08896272faf58'
+                resultDigest = '7faa2ec40c0830f317f4c87296c2e54c27d6f43def9b18f92d113834e982da1c'
+                digest = '7faa2ec40c0830f317f4c87296c2e54c27d6f43def9b18f92d113834e982da1c'
+                result = 'SideAWin'
+                terminalTick = 576
+                survivorCount = 100
+                casualtyCount = 28
+                retreatedUnitCount = 49
+                skipResultDigest = '7faa2ec40c0830f317f4c87296c2e54c27d6f43def9b18f92d113834e982da1c'
+                watchedResultDigest = '7faa2ec40c0830f317f4c87296c2e54c27d6f43def9b18f92d113834e982da1c'
+                skipResult = 'SideAWin'
+                watchedResult = 'SideAWin'
+            }
+
+            foreach ($expectedProperty in $expectedBattleLabValues.Keys) {
+                if ((Has-Property $report $expectedProperty) -and [string]$report.$expectedProperty -ne [string]$expectedBattleLabValues[$expectedProperty]) {
+                    Add-Failure "BattleLab runtime report $expectedProperty '$($report.$expectedProperty)' does not match expected '$($expectedBattleLabValues[$expectedProperty])'."
+                }
+            }
+
+            if ((Has-Property $report 'skipWatchEquivalent') -and $report.skipWatchEquivalent -ne $true) {
+                Add-Failure 'BattleLab runtime report must prove skipWatchEquivalent=true.'
+            }
+
+            if ((Has-Property $report 'resolutionIdentityShared') -and $report.resolutionIdentityShared -ne $true) {
+                Add-Failure 'BattleLab runtime report must prove resolutionIdentityShared=true.'
+            }
+
+            if ((Has-Property $report 'headlessResolutionElapsedMilliseconds') -and
+                (Has-Property $report 'nominalTranscriptDurationMilliseconds')) {
+                try {
+                    $headlessMilliseconds = [double]$report.headlessResolutionElapsedMilliseconds
+                    $nominalMilliseconds = [double]$report.nominalTranscriptDurationMilliseconds
+                    if ($nominalMilliseconds -le 0) {
+                        Add-Failure 'BattleLab nominalTranscriptDurationMilliseconds must be positive.'
+                    }
+                    elseif ($headlessMilliseconds -ge ($nominalMilliseconds / 5.0)) {
+                        Add-Failure "BattleLab headless resolution ${headlessMilliseconds}ms did not complete in less than one fifth of nominal 1x duration ${nominalMilliseconds}ms."
+                    }
+                }
+                catch {
+                    Add-Failure 'BattleLab timing fields must be numeric milliseconds.'
+                }
+            }
+        }
     }
 }
 

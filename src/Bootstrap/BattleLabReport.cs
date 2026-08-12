@@ -52,7 +52,19 @@ public sealed class BattleLabReport
 
     public string Digest { get; init; } = string.Empty;
 
+    public string SkipResultDigest { get; init; } = string.Empty;
+
+    public string WatchedResultDigest { get; init; } = string.Empty;
+
     public string Result { get; init; } = string.Empty;
+
+    public string SkipResult { get; init; } = string.Empty;
+
+    public string WatchedResult { get; init; } = string.Empty;
+
+    public bool SkipWatchEquivalent { get; init; }
+
+    public bool ResolutionIdentityShared { get; init; }
 
     public string? WinnerSideId { get; init; }
 
@@ -91,6 +103,10 @@ public sealed class BattleLabReport
     public int RoutedFormationsShown { get; init; }
 
     public int ControlTransitions { get; init; }
+
+    public double HeadlessResolutionElapsedMilliseconds { get; init; }
+
+    public double NominalTranscriptDurationMilliseconds { get; init; }
 
     public bool ResultShown { get; init; }
 
@@ -163,6 +179,10 @@ public sealed class BattleLabReport
         AddRequired(errors, ResultDigest, nameof(ResultDigest));
         AddRequired(errors, Digest, nameof(Digest));
         AddRequired(errors, Result, nameof(Result));
+        AddRequired(errors, SkipResultDigest, nameof(SkipResultDigest));
+        AddRequired(errors, WatchedResultDigest, nameof(WatchedResultDigest));
+        AddRequired(errors, SkipResult, nameof(SkipResult));
+        AddRequired(errors, WatchedResult, nameof(WatchedResult));
 
         if (Seed == 0)
         {
@@ -224,6 +244,46 @@ public sealed class BattleLabReport
         if (ResultDigest != Digest)
         {
             errors.Add("ResultDigest and Digest must identify the same authoritative result.");
+        }
+
+        if (!ResolutionIdentityShared)
+        {
+            errors.Add("Skip and watch must receive the same committed resolution identity.");
+        }
+
+        if (!SkipWatchEquivalent)
+        {
+            errors.Add("Skip and watch authoritative outcomes are not exactly equal.");
+        }
+
+        if (!string.Equals(SkipResult, Result, StringComparison.Ordinal) ||
+            !string.Equals(WatchedResult, Result, StringComparison.Ordinal))
+        {
+            errors.Add("Skip, watched, and authoritative result classifications must match.");
+        }
+
+        if (!string.Equals(SkipResultDigest, ResultDigest, StringComparison.Ordinal) ||
+            !string.Equals(WatchedResultDigest, ResultDigest, StringComparison.Ordinal))
+        {
+            errors.Add("Skip, watched, and authoritative result digests must match.");
+        }
+
+        if (double.IsNaN(HeadlessResolutionElapsedMilliseconds) ||
+            double.IsInfinity(HeadlessResolutionElapsedMilliseconds) ||
+            HeadlessResolutionElapsedMilliseconds < 0.0)
+        {
+            errors.Add("HeadlessResolutionElapsedMilliseconds must be a finite non-negative value.");
+        }
+
+        if (double.IsNaN(NominalTranscriptDurationMilliseconds) ||
+            double.IsInfinity(NominalTranscriptDurationMilliseconds) ||
+            NominalTranscriptDurationMilliseconds <= 0.0)
+        {
+            errors.Add("NominalTranscriptDurationMilliseconds must be a finite positive value.");
+        }
+        else if (HeadlessResolutionElapsedMilliseconds >= NominalTranscriptDurationMilliseconds / 5.0)
+        {
+            errors.Add("Headless resolution must complete in less than one fifth of nominal 1x transcript duration.");
         }
 
         return errors;

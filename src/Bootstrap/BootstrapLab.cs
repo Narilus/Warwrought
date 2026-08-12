@@ -19,7 +19,23 @@ public partial class BootstrapLab : Node
     {
         try
         {
-            var arguments = BootstrapLabArguments.Parse(OS.GetCmdlineUserArgs());
+            var userArguments = OS.GetCmdlineUserArgs();
+
+            // Exported Godot players use the configured main scene and do not support the
+            // editor-only --scene path override. Route the declared M1 acceptance scenario into
+            // the maintained BattleLab production scene before parsing BootstrapLab arguments.
+            // This is only an entry-scene handoff; BattleLab owns the real resolution/playback and
+            // the existing BootstrapLab acceptance contract remains unchanged for its scenario.
+            var battleLabArguments = BattleLabArguments.Parse(userArguments);
+            if (battleLabArguments.IsAcceptanceMode)
+            {
+                // The main scene is still entering its ready callback, so defer the normal Godot
+                // scene change until the tree is no longer busy adding/removing children.
+                GetTree().CallDeferred("change_scene_to_file", BattleLab.ScenePath);
+                return;
+            }
+
+            var arguments = BootstrapLabArguments.Parse(userArguments);
 
             if (!arguments.IsAcceptanceRequested)
             {

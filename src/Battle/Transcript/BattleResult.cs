@@ -203,6 +203,94 @@ public sealed record BattleResult
 
     public string Digest => CanonicalDigest;
 
+    /// <summary>
+    /// Compares the complete M1 campaign-relevant result contract rather than record/reference
+    /// identity. This is used at the skip/watch boundary; presentation text and view state are
+    /// intentionally not part of the comparison.
+    /// </summary>
+    public bool IsExactlyEqualTo(BattleResult other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+
+        if (BattleId != other.BattleId ||
+            SimulationVersion != other.SimulationVersion ||
+            Seed != other.Seed ||
+            ResultType != other.ResultType ||
+            WinnerSideId != other.WinnerSideId ||
+            TerminalTick != other.TerminalTick ||
+            IsTerminal != other.IsTerminal ||
+            !StringComparer.Ordinal.Equals(DiagnosticReason, other.DiagnosticReason) ||
+            !StringComparer.Ordinal.Equals(TranscriptDigest, other.TranscriptDigest) ||
+            !StringComparer.Ordinal.Equals(CanonicalDigest, other.CanonicalDigest))
+        {
+            return false;
+        }
+
+        if (!AreSurvivorsEqual(Survivors, other.Survivors) ||
+            !AreCasualtiesEqual(Casualties, other.Casualties) ||
+            !AreSurvivorsEqual(RoutedUnits, other.RoutedUnits) ||
+            !AreSurvivorsEqual(RetreatedUnits, other.RetreatedUnits) ||
+            !CommanderStatuses.SequenceEqual(other.CommanderStatuses, StringComparer.Ordinal))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool AreSurvivorsEqual(
+        IReadOnlyList<BattleSurvivorRecord> first,
+        IReadOnlyList<BattleSurvivorRecord> second)
+    {
+        if (first.Count != second.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < first.Count; index++)
+        {
+            var left = first[index];
+            var right = second[index];
+            if (left.UnitId != right.UnitId ||
+                left.SideId != right.SideId ||
+                left.SquadId != right.SquadId ||
+                left.State != right.State ||
+                left.RemainingHealth != right.RemainingHealth ||
+                left.FinalMorale != right.FinalMorale)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool AreCasualtiesEqual(
+        IReadOnlyList<BattleCasualtyRecord> first,
+        IReadOnlyList<BattleCasualtyRecord> second)
+    {
+        if (first.Count != second.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < first.Count; index++)
+        {
+            var left = first[index];
+            var right = second[index];
+            if (left.UnitId != right.UnitId ||
+                left.SideId != right.SideId ||
+                left.SquadId != right.SquadId ||
+                left.KilledAtTick != right.KilledAtTick ||
+                left.KilledByUnitId != right.KilledByUnitId)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private void ValidateClassification()
     {
         if (IsTerminal && ResultType == BattleResultType.NonTerminalFailure)

@@ -60,6 +60,13 @@ public sealed class BattleTranscriptPlayback
 
     public int KeyframesConsumed => _nextKeyframeIndex;
 
+    /// <summary>
+    /// Nominal 1x duration derived from the retained transcript's authoritative terminal tick and
+    /// header frequency. It is presentation timing evidence, not simulation state.
+    /// </summary>
+    public double NominalDurationMilliseconds =>
+        (Result.TerminalTick.Value * 1_000.0) / Transcript.Header.TicksPerSecond;
+
     public bool IsComplete => Clock.IsAtEnd && _nextEventIndex >= _events.Count && _nextKeyframeIndex >= _keyframes.Count;
 
     public PlaybackStep ResetAndConsume()

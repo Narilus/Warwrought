@@ -84,6 +84,17 @@ public partial class BattlePlaybackController : Node
 
     public bool ResultShown => _resultShown;
 
+    /// <summary>
+    /// The retained resolution identity once the authoritative BattleEnded event has been
+    /// presented. The result is exposed from this handoff, never reconstructed from views or HUD
+    /// text.
+    /// </summary>
+    public BattleResolution? PresentedResolution => _resultShown ? Resolution : null;
+
+    public BattleResult? PresentedResult => _resultShown ? Resolution.Result : null;
+
+    public double NominalTranscriptDurationMilliseconds => Playback.NominalDurationMilliseconds;
+
     public bool PlaybackCompleted
     {
         get
@@ -440,6 +451,8 @@ public partial class BattlePlaybackController : Node
     {
         _resultShown = true;
         var result = Resolution.Result;
+        // BattleEnded is an authoritative transcript record. The displayed result is the stored
+        // BattleResult from the handoff; no presentation state is inspected to infer an outcome.
         _resultLabel!.Text = @event.IsTerminal
             ? $"Result: {result.ResultType}  |  tick {result.TerminalTick.Value}  |  digest {result.CanonicalDigest[..12]}…"
             : $"Result: {result.ResultType} — {result.DiagnosticReason}";

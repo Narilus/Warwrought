@@ -67,6 +67,60 @@ public sealed class M2BattlePresentationTests
     }
 
     [Fact]
+    public void AuthoredFoliageMappingIsStableAndReachesEveryCommittedSource()
+    {
+        var profiles = new[]
+        {
+            BattlefieldFixtureFactory.CreateM2OpenMeadowProfile(),
+            BattlefieldFixtureFactory.CreateM2BroadHighlandProfile(),
+        };
+
+        var reachablePaths = profiles
+            .SelectMany(profile => new BattlefieldFoliageScatter(profile).CreatePlacements())
+            .Where(placement => placement.Kind != BattlefieldDecorationKind.Rock)
+            .Select(BattlefieldTerrainView.SelectFoliageTexturePath)
+            .Distinct()
+            .OrderBy(path => path)
+            .ToArray();
+
+        var expectedPaths = BattlefieldTerrainView.AuthoredFoliageTexturePaths
+            .OrderBy(path => path)
+            .ToArray();
+
+        Assert.Equal(expectedPaths, reachablePaths);
+
+        var repeat = profiles
+            .SelectMany(profile => new BattlefieldFoliageScatter(profile).CreatePlacements())
+            .Where(placement => placement.Kind != BattlefieldDecorationKind.Rock)
+            .Select(BattlefieldTerrainView.SelectFoliageTexturePath)
+            .ToArray();
+        var first = profiles
+            .SelectMany(profile => new BattlefieldFoliageScatter(profile).CreatePlacements())
+            .Where(placement => placement.Kind != BattlefieldDecorationKind.Rock)
+            .Select(BattlefieldTerrainView.SelectFoliageTexturePath)
+            .ToArray();
+
+        Assert.Equal(first, repeat);
+    }
+
+    [Fact]
+    public void AuthoredFoliageIntegrationRetainsProtectedScatterDigests()
+    {
+        var meadow = BattlefieldFixtureFactory.CreateM2OpenMeadowProfile();
+        var highland = BattlefieldFixtureFactory.CreateM2BroadHighlandProfile();
+
+        var meadowScatter = new BattlefieldFoliageScatter(meadow);
+        var highlandScatter = new BattlefieldFoliageScatter(highland);
+
+        Assert.Equal(
+            "adda947b93cd28b4d1170138d5538b419dc4237efcc70f6f19b8baa516c863e6",
+            meadowScatter.ComputePlacementDigest(meadowScatter.CreatePlacements()));
+        Assert.Equal(
+            "9a12bd67baf35b084e0fc6c0ee8fa22c6bc9e40ea8706f359d7d239fb3d83d83",
+            highlandScatter.ComputePlacementDigest(highlandScatter.CreatePlacements()));
+    }
+
+    [Fact]
     public void CameraAndPresentationControlsDoNotMutateRetainedResolutionDigests()
     {
         var committed = CommittedBattleResolution.Commit(BattleFixtureFactory.CreateM1MeleeFixture());

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Godot;
 using Warwrought.Battle.Model;
 
@@ -7,12 +8,43 @@ namespace Warwrought.Presentation.Battle;
 /// <summary>
 /// Maintained BattleLab terrain/decor root. The scene provides the required roots; this production
 /// node consumes the selected M2.1 profile, builds the visible ArrayMesh, and scatters static
-/// presentation placeholders without collision or per-node update scripts.
+/// authored billboards/primitive props without collision or per-node update scripts.
 /// </summary>
 public partial class BattlefieldTerrainView : Node3D
 {
-    public const string SideATexturePath = "res://assets/sprites/m1_side_a_infantry.tres";
-    public const string SideBTexturePath = "res://assets/sprites/m1_side_b_infantry.tres";
+    public const string GrassClump01TexturePath = "res://assets/environment/m2/foliage/grass_clump_01.png";
+    public const string GrassClump02TexturePath = "res://assets/environment/m2/foliage/grass_clump_02.png";
+    public const string ShrubLeafy01TexturePath = "res://assets/environment/m2/foliage/shrub_leafy_01.png";
+    public const string ShrubScrub01TexturePath = "res://assets/environment/m2/foliage/shrub_scrub_01.png";
+    public const string TreeSmall01TexturePath = "res://assets/environment/m2/foliage/tree_small_01.png";
+    public const string TreeSmall02TexturePath = "res://assets/environment/m2/foliage/tree_small_02.png";
+    public const string DeadBrush01TexturePath = "res://assets/environment/m2/foliage/dead_brush_01.png";
+
+    private static readonly FoliageSpriteProfile[] TreeProfiles =
+    {
+        new("tree_small_01", TreeSmall01TexturePath, 0.0058f, 222.0f),
+        new("tree_small_02", TreeSmall02TexturePath, 0.0055f, 232.0f),
+    };
+
+    private static readonly FoliageSpriteProfile[] BushProfiles =
+    {
+        new("grass_clump_01", GrassClump01TexturePath, 0.0044f, 194.0f),
+        new("grass_clump_02", GrassClump02TexturePath, 0.0037f, 224.0f),
+        new("shrub_leafy_01", ShrubLeafy01TexturePath, 0.0045f, 211.0f),
+        new("shrub_scrub_01", ShrubScrub01TexturePath, 0.0042f, 233.0f),
+        new("dead_brush_01", DeadBrush01TexturePath, 0.0044f, 233.0f),
+    };
+
+    private static readonly string[] AuthoredTexturePaths =
+    {
+        GrassClump01TexturePath,
+        GrassClump02TexturePath,
+        ShrubLeafy01TexturePath,
+        ShrubScrub01TexturePath,
+        TreeSmall01TexturePath,
+        TreeSmall02TexturePath,
+        DeadBrush01TexturePath,
+    };
 
     private BattlefieldPresentationProjector? _projector;
     private BattlefieldTerrainPresenter? _presenter;
@@ -20,8 +52,7 @@ public partial class BattlefieldTerrainView : Node3D
     private Node3D? _propsRoot;
     private MeshInstance3D? _ground;
     private MeshInstance3D? _contactLine;
-    private Texture2D? _treeTexture;
-    private Texture2D? _bushTexture;
+    private readonly Dictionary<string, Texture2D> _foliageTextures = new(StringComparer.Ordinal);
 
     public bool IsConfigured => _presenter is not null;
 
@@ -40,6 +71,18 @@ public partial class BattlefieldTerrainView : Node3D
     public int PropCount { get; private set; }
 
     public string FoliageDigest { get; private set; } = string.Empty;
+
+    public static IReadOnlyList<string> AuthoredFoliageTexturePaths => AuthoredTexturePaths;
+
+    /// <summary>
+    /// Selects an authored source from the immutable placement identity only. The ordinal, kind,
+    /// tint variant, and flip flag are already part of the deterministic scatter output; no
+    /// engine/global/system random state is consulted here.
+    /// </summary>
+    public static string SelectFoliageTexturePath(BattlefieldDecorationPlacement placement)
+    {
+        return SelectFoliageProfile(placement).TexturePath;
+    }
 
     public override void _Ready()
     {
@@ -83,10 +126,15 @@ public partial class BattlefieldTerrainView : Node3D
 
     private void LoadRequiredDecorationTextures()
     {
-        _treeTexture = GD.Load<Texture2D>(SideATexturePath)
-            ?? throw new InvalidOperationException($"BattleLab required foliage placeholder resource is missing: {SideATexturePath}");
-        _bushTexture = GD.Load<Texture2D>(SideBTexturePath)
-            ?? throw new InvalidOperationException($"BattleLab required foliage placeholder resource is missing: {SideBTexturePath}");
+        _foliageTextures.Clear();
+        for (var index = 0; index < AuthoredTexturePaths.Length; index++)
+        {
+            var texturePath = AuthoredTexturePaths[index];
+            _foliageTextures.Add(
+                texturePath,
+                GD.Load<Texture2D>(texturePath)
+                    ?? throw new InvalidOperationException($"BattleLab required authored foliage resource is missing: {texturePath}"));
+        }
     }
 
     private void CreateDecorations()
@@ -112,21 +160,33 @@ public partial class BattlefieldTerrainView : Node3D
 
     private void CreateBillboard(BattlefieldDecorationPlacement placement)
     {
-        var isTree = placement.Kind == BattlefieldDecorationKind.Tree;
+        var profile = SelectFoliageProfile(placement);
+        var placementScale = placement.ScalePermille / 1_000.0f;
         var sprite = new Sprite3D
         {
-            Name = $"{(isTree ? "Tree" : "Bush")}_{placement.Ordinal:000}",
-            Texture = isTree ? _treeTexture : _bushTexture,
+            Name = $"{profile.Id}_{placement.Ordinal:000}",
+            Texture = _foliageTextures[profile.TexturePath],
             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
-            PixelSize = isTree ? 0.030f : 0.022f,
-            Modulate = DecorationColor(placement, isTree),
+            PixelSize = profile.PixelSize,
+            // The staging sources are transparent RGBA. Keep standard alpha blending so their
+            // soft authored edges remain intact, and keep them unshaded so Forward+ lighting does
+            // not turn the photographic silhouettes into dark cut-outs.
+            Transparent = true,
+            AlphaCut = SpriteBase3D.AlphaCutMode.Disabled,
+            Shaded = false,
+            DoubleSided = true,
+            TextureFilter = BaseMaterial3D.TextureFilterEnum.Linear,
+            Modulate = DecorationColor(placement),
             FlipH = placement.Flipped,
+            // The source objects are lower-centred inside their 512x512 canvases. A per-source
+            // pixel pivot moves the authored base to the sampled terrain without changing pixels.
+            Offset = new Vector2(0.0f, profile.PivotOffsetPixels),
             Position = _projector!.Project(
                 placement.XUnits,
                 placement.ZUnits,
-                isTree ? BattlefieldPresentationProjector.TreeVerticalOffset : BattlefieldPresentationProjector.BushVerticalOffset,
+                0.0f,
                 BattlefieldProjectionPurpose.Decoration),
-            Scale = Vector3.One * (placement.ScalePermille / 1_000.0f),
+            Scale = Vector3.One * placementScale,
         };
         _foliageRoot!.AddChild(sprite);
     }
@@ -160,21 +220,31 @@ public partial class BattlefieldTerrainView : Node3D
         PropCount++;
     }
 
-    private static Color DecorationColor(BattlefieldDecorationPlacement placement, bool tree)
+    private static FoliageSpriteProfile SelectFoliageProfile(BattlefieldDecorationPlacement placement)
     {
-        var baseColor = tree
-            ? new Color(0.20f, 0.48f, 0.25f, 0.94f)
-            : new Color(0.30f, 0.56f, 0.22f, 0.90f);
+        var variant = placement.Ordinal + (placement.TintVariant * 3) + (placement.Flipped ? 1 : 0);
+        return placement.Kind switch
+        {
+            BattlefieldDecorationKind.Tree => TreeProfiles[variant % TreeProfiles.Length],
+            BattlefieldDecorationKind.Bush => BushProfiles[variant % BushProfiles.Length],
+            _ => throw new ArgumentOutOfRangeException(nameof(placement), placement.Kind, "Rocks use the existing primitive prop path and do not select a foliage texture."),
+        };
+    }
+
+    private static Color DecorationColor(BattlefieldDecorationPlacement placement)
+    {
         var accent = placement.TintVariant switch
         {
-            1 => new Color(1.0f, 0.88f, 0.72f, 1.0f),
-            2 => new Color(0.76f, 0.90f, 1.0f, 1.0f),
+            1 => new Color(1.0f, 0.96f, 0.90f, 1.0f),
+            2 => new Color(0.90f, 0.96f, 1.0f, 1.0f),
             _ => Colors.White,
         };
-        return new Color(
-            baseColor.R * accent.R,
-            baseColor.G * accent.G,
-            baseColor.B * accent.B,
-            baseColor.A);
+        return accent;
     }
+
+    private readonly record struct FoliageSpriteProfile(
+        string Id,
+        string TexturePath,
+        float PixelSize,
+        float PivotOffsetPixels);
 }

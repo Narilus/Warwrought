@@ -1,6 +1,10 @@
-# M2 Foliage Billboard Staging Pack
+# M2 Foliage Billboard Pack
 
-All sprites are 512 x 512 PNGs with transparency and are staging assets only. They are not yet referenced by Godot resources or runtime code.
+All sprites are 512 x 512 PNGs with transparency and are staging assets only. Production
+`BattlefieldTerrainView` loads them directly as deterministic `Sprite3D` billboard sources; the
+PNG pixels remain unchanged.
+The source imports preserve RGBA alpha with border fixing and no premultiplied alpha or generated
+mipmaps for the current billboard scale; the presenter uses standard alpha blending.
 
 | File | Category | Intended use |
 | --- | --- | --- |
@@ -12,4 +16,4 @@ All sprites are 512 x 512 PNGs with transparency and are staging assets only. Th
 | `tree_small_02.png` | Small ash | Narrow, wind-shaped tree silhouette |
 | `dead_brush_01.png` | Dead brush | Dry bramble / broken sapling dressing |
 
-Use as `Sprite3D` textures with billboard mode. Each source has a transparent background and lower-centred object placement; integration should tune pixel size, vertical offset, tint, and scale for the existing deterministic scatter without changing scatter authority.
+Use as `Sprite3D` textures with billboard mode. Each source has a transparent background and lower-centred object placement; the production integration tunes pixel size, vertical offset, tint, and scale for the existing deterministic scatter without changing scatter authority.

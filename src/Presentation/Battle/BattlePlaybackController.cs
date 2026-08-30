@@ -292,7 +292,7 @@ public partial class BattlePlaybackController : Node
                 {
                     Name = $"UnitView_{_unitsSpawned:000}",
                     Texture = texture,
-                    Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+                    Billboard = BaseMaterial3D.BillboardModeEnum.FixedY,
                     PixelSize = 0.012f,
                     Modulate = factionColor,
                     Position = Projector.Project(member.Position, BattlefieldPresentationProjector.UnitVerticalOffset, BattlefieldProjectionPurpose.Unit),
@@ -543,7 +543,7 @@ public partial class BattlePlaybackController : Node
         {
             Name = $"Remains_{_remainsViews.Count:000}",
             Texture = _remainsTexture,
-            Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+            Billboard = BaseMaterial3D.BillboardModeEnum.FixedY,
             PixelSize = 0.014f,
             Modulate = view.FactionColor,
             Position = Projector.Project(

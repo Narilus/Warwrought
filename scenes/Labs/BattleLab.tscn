@@ -59,10 +59,10 @@ mesh = SubResource("BoxMesh_contact")
 script = ExtResource("4_camera")
 
 [node name="Camera3D" type="Camera3D" parent="BattlefieldRoot/CameraRig"]
-position = Vector3(0, 27, 31)
-rotation_degrees = Vector3(-48, 0, 0)
+position = Vector3(0, 30, 34)
+rotation_degrees = Vector3(-36, 0, 0)
 projection = 1
-size = 52.0
+size = 60.0
 current = true
 
 [node name="Sun" type="DirectionalLight3D" parent="."]

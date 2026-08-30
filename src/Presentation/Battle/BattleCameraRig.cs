@@ -12,8 +12,8 @@ public partial class BattleCameraRig : Node3D
 {
     public const float DefaultCameraHeight = 30.0f;
     public const float DefaultCameraDistance = 34.0f;
-    public const float DefaultCameraAngleDegrees = -48.0f;
-    public const float DefaultOrthographicSize = 58.0f;
+    public const float DefaultCameraAngleDegrees = -36.0f;
+    public const float DefaultOrthographicSize = 60.0f;
     public const float MinimumOrthographicSize = 34.0f;
     public const float MaximumOrthographicSize = 88.0f;
     public const float PanStepWorldUnits = 4.0f;

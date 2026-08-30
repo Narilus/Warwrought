@@ -166,7 +166,7 @@ public partial class BattlefieldTerrainView : Node3D
         {
             Name = $"{profile.Id}_{placement.Ordinal:000}",
             Texture = _foliageTextures[profile.TexturePath],
-            Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+            Billboard = BaseMaterial3D.BillboardModeEnum.FixedY,
             PixelSize = profile.PixelSize,
             // The staging sources are transparent RGBA. Keep standard alpha blending so their
             // soft authored edges remain intact, and keep them unshaded so Forward+ lighting does

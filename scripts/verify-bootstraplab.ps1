@@ -85,6 +85,10 @@ else {
                     $verifiedScenario = 'battlelab.m2.broad-highland'
                     $verifiedScene = 'BattleLab'
                 }
+                'battlescalelab.m2.100v100' {
+                    $verifiedScenario = 'battlescalelab.m2.100v100'
+                    $verifiedScene = 'BattleScaleLab'
+                }
                 default {
                     Add-Failure "Runtime report scenario is unsupported: $($report.scenario)"
                 }
@@ -98,6 +102,9 @@ else {
         if ((Has-Property $report 'scenePath') -and $null -ne $verifiedScene) {
             $expectedScenePath = if ($verifiedScene -eq 'BootstrapLab') {
                 'res://scenes/Labs/BootstrapLab.tscn'
+            }
+            elseif ($verifiedScene -eq 'BattleScaleLab') {
+                'res://scenes/Labs/BattleScaleLab.tscn'
             }
             else {
                 'res://scenes/Labs/BattleLab.tscn'
@@ -258,6 +265,91 @@ else {
                 }
             }
         }
+
+        if ($verifiedScenario -eq 'battlescalelab.m2.100v100') {
+            $scaleRequiredProperties = @(
+                'battleId',
+                'seed',
+                'simulationVersion',
+                'authoritativeInputDigest',
+                'transcriptDigest',
+                'resultDigest',
+                'result',
+                'resolutionSourceClassification',
+                'authoritativeResolutionRetained',
+                'resolutionIdentityShared',
+                'skipWatchEquivalent',
+                'requestedUnitsPerSide',
+                'expectedTotalUnitCount',
+                'actualSideAUnitCount',
+                'actualSideBUnitCount',
+                'actualTotalUnitCount',
+                'unitsSpawned',
+                'projectedUnitCount',
+                'transcriptEventCount',
+                'transcriptKeyframeCount',
+                'transcriptEventsConsumed',
+                'movementKeyframesConsumed',
+                'contactEventsPresented',
+                'attackEventsPresented',
+                'damageEventsPresented',
+                'deathEventsPresented',
+                'remainsSpawned',
+                'routedFormationsShown',
+                'controlTransitions',
+                'resultShown',
+                'playbackCompleted',
+                'battlefieldProfile',
+                'battlefieldSeed',
+                'battlefieldDigest',
+                'terrainMeshTriangleCount',
+                'terrainMeshVertexCount',
+                'terrainMeshSamplerAgreement',
+                'foliagePlacementCount',
+                'foliageDigest',
+                'cameraOrthographic',
+                'cameraPanOperations',
+                'cameraZoomOperations',
+                'cameraResetOperations',
+                'cameraControlsObserved'
+            )
+
+            foreach ($requiredProperty in $scaleRequiredProperties) {
+                if (-not (Has-Property $report $requiredProperty)) {
+                    Add-Failure "BattleScaleLab runtime report is missing $requiredProperty."
+                }
+            }
+
+            $expectedScaleValues = @{
+                battleId = 'battle.m2.scale.100v100.fixture'
+                seed = 82742
+                simulationVersion = '1.0'
+                resolutionSourceClassification = 'authoritative.real-resolver'
+                requestedUnitsPerSide = 100
+                expectedTotalUnitCount = 200
+                actualSideAUnitCount = 100
+                actualSideBUnitCount = 100
+                actualTotalUnitCount = 200
+                unitsSpawned = 200
+            }
+            foreach ($expectedProperty in $expectedScaleValues.Keys) {
+                if ((Has-Property $report $expectedProperty) -and [string]$report.$expectedProperty -ne [string]$expectedScaleValues[$expectedProperty]) {
+                    Add-Failure "BattleScaleLab runtime report $expectedProperty '$($report.$expectedProperty)' does not match expected '$($expectedScaleValues[$expectedProperty])'."
+                }
+            }
+
+            foreach ($booleanProperty in @('authoritativeResolutionRetained', 'resolutionIdentityShared', 'skipWatchEquivalent', 'resultShown', 'playbackCompleted', 'cameraOrthographic', 'cameraControlsObserved', 'terrainMeshSamplerAgreement')) {
+                if ((Has-Property $report $booleanProperty) -and $report.$booleanProperty -ne $true) {
+                    Add-Failure "BattleScaleLab runtime report must prove $booleanProperty=true."
+                }
+            }
+
+            foreach ($positiveProperty in @('seed', 'battlefieldSeed', 'projectedUnitCount', 'transcriptEventCount', 'transcriptKeyframeCount', 'transcriptEventsConsumed', 'movementKeyframesConsumed', 'contactEventsPresented', 'attackEventsPresented', 'damageEventsPresented', 'deathEventsPresented', 'remainsSpawned', 'routedFormationsShown', 'controlTransitions', 'terrainMeshTriangleCount', 'terrainMeshVertexCount', 'foliagePlacementCount', 'cameraPanOperations', 'cameraZoomOperations', 'cameraResetOperations')) {
+                if ((Has-Property $report $positiveProperty) -and [double]$report.$positiveProperty -le 0) {
+                    Add-Failure "BattleScaleLab runtime report $positiveProperty must be positive."
+                }
+            }
+        }
     }
 }
 
@@ -303,6 +395,9 @@ if ($failures.Count -gt 0) {
 
 if ($verifiedScene -eq 'BattleLab') {
     Write-Host "BattleLab verification PASSED: report '$ReportPath' and log '$LogPath' are clean."
+}
+elseif ($verifiedScene -eq 'BattleScaleLab') {
+    Write-Host "BattleScaleLab verification PASSED: report '$ReportPath' and log '$LogPath' are clean."
 }
 else {
     Write-Host "BootstrapLab verification PASSED: report '$ReportPath' and log '$LogPath' are clean."

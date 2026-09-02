@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Warwrought.Battle.Model;
+using Warwrought.Presentation.Battle;
 
 namespace Warwrought.Bootstrap;
 
@@ -15,6 +16,7 @@ public sealed class BattleScaleLabReport
 {
     public const int CurrentSchemaVersion = 1;
     public const string AuthoritativeRealResolverSource = BattleScaleFixtureFactory.SourceClassification;
+    public const string SyntheticPresentationSource = BattleScalePresentationStressFactory.SourceClassification;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -35,6 +37,7 @@ public sealed class BattleScaleLabReport
     public ulong Seed { get; init; }
     public string SimulationVersion { get; init; } = string.Empty;
     public string AuthoritativeInputDigest { get; init; } = string.Empty;
+    public string SourceIdentityDigest { get; init; } = string.Empty;
     public string TranscriptDigest { get; init; } = string.Empty;
     public string ResultDigest { get; init; } = string.Empty;
     public string Result { get; init; } = string.Empty;
@@ -49,6 +52,26 @@ public sealed class BattleScaleLabReport
     public int ActualTotalUnitCount { get; init; }
     public int UnitsSpawned { get; init; }
     public int ProjectedUnitCount { get; init; }
+    public int ActiveUnitViewCount { get; init; }
+    public int ActiveRemainsViewCount { get; init; }
+    public int ActiveEffectViewCount { get; init; }
+    public int RelevantActiveNodeCount { get; init; }
+    public int PeakRelevantActiveNodeCount { get; init; }
+    public int EffectsSpawned { get; init; }
+    public double ScenePresentationSpawnElapsedMilliseconds { get; init; }
+    public string FrameSampleSource { get; init; } = string.Empty;
+    public double ProfilingPlaybackSpeed { get; init; }
+    public string WarmupPolicy { get; init; } = string.Empty;
+    public int FrameSampleCount { get; init; }
+    public double MeasuredSampleWindowDurationMilliseconds { get; init; }
+    public int WarmupExcludedSampleCount { get; init; }
+    public double WarmupExcludedDurationMilliseconds { get; init; }
+    public double MedianPlaybackFrameMilliseconds { get; init; }
+    public double P95PlaybackFrameMilliseconds { get; init; }
+    public bool MemoryMeasurementAvailable { get; init; }
+    public string MemoryMeasurementSource { get; init; } = string.Empty;
+    public string MemoryMeasurementUnit { get; init; } = string.Empty;
+    public long MemoryBytes { get; init; }
     public int TranscriptEventCount { get; init; }
     public int TranscriptKeyframeCount { get; init; }
     public int TranscriptEventsConsumed { get; init; }
@@ -141,7 +164,7 @@ public sealed class BattleScaleLabReport
         {
             (BattleId, nameof(BattleId)),
             (SimulationVersion, nameof(SimulationVersion)),
-            (AuthoritativeInputDigest, nameof(AuthoritativeInputDigest)),
+            (SourceIdentityDigest, nameof(SourceIdentityDigest)),
             (TranscriptDigest, nameof(TranscriptDigest)),
             (ResultDigest, nameof(ResultDigest)),
             (Result, nameof(Result)),
@@ -156,24 +179,53 @@ public sealed class BattleScaleLabReport
             }
         }
 
-        if (ResolutionSourceClassification != AuthoritativeRealResolverSource)
+        if (ResolutionSourceClassification != AuthoritativeRealResolverSource &&
+            ResolutionSourceClassification != SyntheticPresentationSource)
         {
-            errors.Add($"ResolutionSourceClassification must be '{AuthoritativeRealResolverSource}'.");
+            errors.Add($"ResolutionSourceClassification must be '{AuthoritativeRealResolverSource}' or '{SyntheticPresentationSource}'.");
         }
 
-        if (!AuthoritativeResolutionRetained || !ResolutionIdentityShared || !SkipWatchEquivalent)
+        var isAuthoritativeScenario = ResolutionSourceClassification == AuthoritativeRealResolverSource;
+        var expectedUnitsPerSide = Scenario switch
+        {
+            BattleScaleLabArguments.AcceptanceScenario => BattleScaleFixtureFactory.UnitsPerSide,
+            BattleScaleLabArguments.Presentation300Scenario => 300,
+            BattleScaleLabArguments.Presentation500Scenario => 500,
+            _ => 0,
+        };
+        if (expectedUnitsPerSide == 0)
+        {
+            errors.Add($"Unsupported ScaleLab scenario '{Scenario}'.");
+        }
+
+        if (isAuthoritativeScenario && string.IsNullOrWhiteSpace(AuthoritativeInputDigest))
+        {
+            errors.Add("AuthoritativeInputDigest is required for the real-resolver ScaleLab scenario.");
+        }
+
+        if (!isAuthoritativeScenario && !string.IsNullOrWhiteSpace(AuthoritativeInputDigest))
+        {
+            errors.Add("Synthetic presentation ScaleLab scenarios must not claim an authoritative input digest.");
+        }
+
+        if (isAuthoritativeScenario && (!AuthoritativeResolutionRetained || !ResolutionIdentityShared || !SkipWatchEquivalent))
         {
             errors.Add("ScaleLab must retain one committed authoritative resolution shared by skip and watch.");
         }
 
-        if (RequestedUnitsPerSide != BattleScaleFixtureFactory.UnitsPerSide ||
-            ExpectedTotalUnitCount != BattleScaleFixtureFactory.UnitsPerSide * 2 ||
-            ActualSideAUnitCount != BattleScaleFixtureFactory.UnitsPerSide ||
-            ActualSideBUnitCount != BattleScaleFixtureFactory.UnitsPerSide ||
-            ActualTotalUnitCount != ExpectedTotalUnitCount ||
-            UnitsSpawned != ExpectedTotalUnitCount)
+        if (!isAuthoritativeScenario && (AuthoritativeResolutionRetained || ResolutionIdentityShared || SkipWatchEquivalent))
         {
-            errors.Add("ScaleLab must request, construct, and spawn exactly 100 units per side / 200 total.");
+            errors.Add("Synthetic presentation ScaleLab scenarios must not claim authoritative skip/watch ownership.");
+        }
+
+        if (expectedUnitsPerSide > 0 && (RequestedUnitsPerSide != expectedUnitsPerSide ||
+            ExpectedTotalUnitCount != expectedUnitsPerSide * 2 ||
+            ActualSideAUnitCount != expectedUnitsPerSide ||
+            ActualSideBUnitCount != expectedUnitsPerSide ||
+            ActualTotalUnitCount != ExpectedTotalUnitCount ||
+            UnitsSpawned != ExpectedTotalUnitCount))
+        {
+            errors.Add($"ScaleLab must request, construct, and spawn exactly {expectedUnitsPerSide} units per side / {expectedUnitsPerSide * 2} total.");
         }
 
         if (TranscriptEventCount <= 0 || TranscriptKeyframeCount <= 0 ||
@@ -188,6 +240,37 @@ public sealed class BattleScaleLabReport
             ProjectedUnitCount <= 0 || !ResultShown || !PlaybackCompleted)
         {
             errors.Add("ScaleLab acceptance requires non-zero production presentation and completed playback evidence.");
+        }
+
+        if (ActiveUnitViewCount != ExpectedTotalUnitCount || RelevantActiveNodeCount <= 0 ||
+            PeakRelevantActiveNodeCount < RelevantActiveNodeCount || EffectsSpawned <= 0 ||
+            ScenePresentationSpawnElapsedMilliseconds < 0.0 ||
+            string.IsNullOrWhiteSpace(FrameSampleSource) || ProfilingPlaybackSpeed <= 0.0 ||
+            string.IsNullOrWhiteSpace(WarmupPolicy) || FrameSampleCount <= 0 ||
+            MeasuredSampleWindowDurationMilliseconds <= 0.0 || WarmupExcludedSampleCount < 0 ||
+            WarmupExcludedDurationMilliseconds < 0.0 || MedianPlaybackFrameMilliseconds < 0.0 ||
+            P95PlaybackFrameMilliseconds < MedianPlaybackFrameMilliseconds)
+        {
+            errors.Add("ScaleLab acceptance requires bounded production frame samples, warm-up accounting, active-node counts, and median/p95 metrics.");
+        }
+
+        if (!double.IsFinite(ScenePresentationSpawnElapsedMilliseconds) ||
+            !double.IsFinite(ProfilingPlaybackSpeed) ||
+            !double.IsFinite(MeasuredSampleWindowDurationMilliseconds) ||
+            !double.IsFinite(WarmupExcludedDurationMilliseconds) ||
+            !double.IsFinite(MedianPlaybackFrameMilliseconds) ||
+            !double.IsFinite(P95PlaybackFrameMilliseconds))
+        {
+            errors.Add("ScaleLab timing metrics must be finite.");
+        }
+
+        if (MemoryMeasurementAvailable)
+        {
+            if (MemoryBytes < 0 || string.IsNullOrWhiteSpace(MemoryMeasurementSource) ||
+                string.IsNullOrWhiteSpace(MemoryMeasurementUnit))
+            {
+                errors.Add("Available ScaleLab memory measurement requires non-negative bytes and an explicit source/unit.");
+            }
         }
 
         if (string.IsNullOrWhiteSpace(BattlefieldDigest) || BattlefieldSeed == 0 ||

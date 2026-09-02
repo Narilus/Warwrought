@@ -53,6 +53,7 @@ public partial class BattlePlaybackController : Node
     private int _damageEventsPresented;
     private int _deathEventsPresented;
     private int _remainsSpawned;
+    private int _effectsSpawned;
     private string? _recentStatusMessage;
     private double _recentStatusRemainingSeconds;
 
@@ -73,6 +74,18 @@ public partial class BattlePlaybackController : Node
     public int DeathEventsPresented => _deathEventsPresented;
 
     public int RemainsSpawned => _remainsSpawned;
+
+    /// <summary>
+    /// Number of ordinary production unit views retained by the centralized playback owner.
+    /// Dead views remain part of this count while their remains presentation is shown.
+    /// </summary>
+    public int ActiveUnitViewCount => _unitViews.Count;
+
+    public int ActiveRemainsViewCount => _remainsViews.Count;
+
+    public int ActiveEffectViewCount => _effects.Count;
+
+    public int EffectsSpawned => _effectsSpawned;
 
     public int RoutedFormationsShown => _routedSquadsShown.Count;
 
@@ -216,6 +229,7 @@ public partial class BattlePlaybackController : Node
         _damageEventsPresented = 0;
         _deathEventsPresented = 0;
         _remainsSpawned = 0;
+        _effectsSpawned = 0;
         _resultShown = false;
         _recentStatusMessage = null;
         _recentStatusRemainingSeconds = 0.0;
@@ -571,6 +585,7 @@ public partial class BattlePlaybackController : Node
         };
         _effectsRoot!.AddChild(effect);
         _effects.Add(new EffectView(effect, EffectDurationSeconds));
+        _effectsSpawned++;
     }
 
     private void UpdateEffects(double delta)

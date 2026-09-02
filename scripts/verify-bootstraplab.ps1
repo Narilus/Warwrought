@@ -89,6 +89,14 @@ else {
                     $verifiedScenario = 'battlescalelab.m2.100v100'
                     $verifiedScene = 'BattleScaleLab'
                 }
+                'battlescalelab.m2.300v300' {
+                    $verifiedScenario = 'battlescalelab.m2.300v300'
+                    $verifiedScene = 'BattleScaleLab'
+                }
+                'battlescalelab.m2.500v500' {
+                    $verifiedScenario = 'battlescalelab.m2.500v500'
+                    $verifiedScene = 'BattleScaleLab'
+                }
                 default {
                     Add-Failure "Runtime report scenario is unsupported: $($report.scenario)"
                 }
@@ -266,12 +274,15 @@ else {
             }
         }
 
-        if ($verifiedScenario -eq 'battlescalelab.m2.100v100') {
+        if ($verifiedScenario -eq 'battlescalelab.m2.100v100' -or
+            $verifiedScenario -eq 'battlescalelab.m2.300v300' -or
+            $verifiedScenario -eq 'battlescalelab.m2.500v500') {
             $scaleRequiredProperties = @(
                 'battleId',
                 'seed',
                 'simulationVersion',
                 'authoritativeInputDigest',
+                'sourceIdentityDigest',
                 'transcriptDigest',
                 'resultDigest',
                 'result',
@@ -286,6 +297,26 @@ else {
                 'actualTotalUnitCount',
                 'unitsSpawned',
                 'projectedUnitCount',
+                'activeUnitViewCount',
+                'activeRemainsViewCount',
+                'activeEffectViewCount',
+                'relevantActiveNodeCount',
+                'peakRelevantActiveNodeCount',
+                'effectsSpawned',
+                'scenePresentationSpawnElapsedMilliseconds',
+                'frameSampleSource',
+                'profilingPlaybackSpeed',
+                'warmupPolicy',
+                'frameSampleCount',
+                'measuredSampleWindowDurationMilliseconds',
+                'warmupExcludedSampleCount',
+                'warmupExcludedDurationMilliseconds',
+                'medianPlaybackFrameMilliseconds',
+                'p95PlaybackFrameMilliseconds',
+                'memoryMeasurementAvailable',
+                'memoryMeasurementSource',
+                'memoryMeasurementUnit',
+                'memoryBytes',
                 'transcriptEventCount',
                 'transcriptKeyframeCount',
                 'transcriptEventsConsumed',
@@ -320,7 +351,8 @@ else {
                 }
             }
 
-            $expectedScaleValues = @{
+            $expectedScaleValues = if ($verifiedScenario -eq 'battlescalelab.m2.100v100') {
+                @{
                 battleId = 'battle.m2.scale.100v100.fixture'
                 seed = 82742
                 simulationVersion = '1.0'
@@ -331,6 +363,35 @@ else {
                 actualSideBUnitCount = 100
                 actualTotalUnitCount = 200
                 unitsSpawned = 200
+                }
+            }
+            elseif ($verifiedScenario -eq 'battlescalelab.m2.300v300') {
+                @{
+                battleId = 'battle.m2.scale.300v300.presentation'
+                seed = 83003
+                simulationVersion = '1.0'
+                resolutionSourceClassification = 'presentation.synthetic-deterministic'
+                requestedUnitsPerSide = 300
+                expectedTotalUnitCount = 600
+                actualSideAUnitCount = 300
+                actualSideBUnitCount = 300
+                actualTotalUnitCount = 600
+                unitsSpawned = 600
+                }
+            }
+            else {
+                @{
+                battleId = 'battle.m2.scale.500v500.presentation'
+                seed = 83005
+                simulationVersion = '1.0'
+                resolutionSourceClassification = 'presentation.synthetic-deterministic'
+                requestedUnitsPerSide = 500
+                expectedTotalUnitCount = 1000
+                actualSideAUnitCount = 500
+                actualSideBUnitCount = 500
+                actualTotalUnitCount = 1000
+                unitsSpawned = 1000
+                }
             }
             foreach ($expectedProperty in $expectedScaleValues.Keys) {
                 if ((Has-Property $report $expectedProperty) -and [string]$report.$expectedProperty -ne [string]$expectedScaleValues[$expectedProperty]) {
@@ -338,15 +399,73 @@ else {
                 }
             }
 
-            foreach ($booleanProperty in @('authoritativeResolutionRetained', 'resolutionIdentityShared', 'skipWatchEquivalent', 'resultShown', 'playbackCompleted', 'cameraOrthographic', 'cameraControlsObserved', 'terrainMeshSamplerAgreement')) {
+            $isAuthoritativeScale = $verifiedScenario -eq 'battlescalelab.m2.100v100'
+            foreach ($booleanProperty in @('resultShown', 'playbackCompleted', 'cameraOrthographic', 'cameraControlsObserved', 'terrainMeshSamplerAgreement', 'memoryMeasurementAvailable')) {
                 if ((Has-Property $report $booleanProperty) -and $report.$booleanProperty -ne $true) {
                     Add-Failure "BattleScaleLab runtime report must prove $booleanProperty=true."
                 }
             }
+            foreach ($authorityProperty in @('authoritativeResolutionRetained', 'resolutionIdentityShared', 'skipWatchEquivalent')) {
+                if ((Has-Property $report $authorityProperty) -and [bool]$report.$authorityProperty -ne $isAuthoritativeScale) {
+                    Add-Failure "BattleScaleLab runtime report $authorityProperty must equal authoritative-scenario state $isAuthoritativeScale."
+                }
+            }
 
-            foreach ($positiveProperty in @('seed', 'battlefieldSeed', 'projectedUnitCount', 'transcriptEventCount', 'transcriptKeyframeCount', 'transcriptEventsConsumed', 'movementKeyframesConsumed', 'contactEventsPresented', 'attackEventsPresented', 'damageEventsPresented', 'deathEventsPresented', 'remainsSpawned', 'routedFormationsShown', 'controlTransitions', 'terrainMeshTriangleCount', 'terrainMeshVertexCount', 'foliagePlacementCount', 'cameraPanOperations', 'cameraZoomOperations', 'cameraResetOperations')) {
+            foreach ($positiveProperty in @('seed', 'battlefieldSeed', 'projectedUnitCount', 'activeUnitViewCount', 'relevantActiveNodeCount', 'peakRelevantActiveNodeCount', 'effectsSpawned', 'scenePresentationSpawnElapsedMilliseconds', 'profilingPlaybackSpeed', 'frameSampleCount', 'measuredSampleWindowDurationMilliseconds', 'transcriptEventCount', 'transcriptKeyframeCount', 'transcriptEventsConsumed', 'movementKeyframesConsumed', 'contactEventsPresented', 'attackEventsPresented', 'damageEventsPresented', 'deathEventsPresented', 'remainsSpawned', 'routedFormationsShown', 'controlTransitions', 'terrainMeshTriangleCount', 'terrainMeshVertexCount', 'foliagePlacementCount', 'cameraPanOperations', 'cameraZoomOperations', 'cameraResetOperations')) {
                 if ((Has-Property $report $positiveProperty) -and [double]$report.$positiveProperty -le 0) {
                     Add-Failure "BattleScaleLab runtime report $positiveProperty must be positive."
+                }
+            }
+
+            foreach ($nonNegativeProperty in @('activeRemainsViewCount', 'activeEffectViewCount', 'warmupExcludedSampleCount', 'warmupExcludedDurationMilliseconds', 'medianPlaybackFrameMilliseconds', 'p95PlaybackFrameMilliseconds', 'memoryBytes')) {
+                if ((Has-Property $report $nonNegativeProperty) -and [double]$report.$nonNegativeProperty -lt 0) {
+                    Add-Failure "BattleScaleLab runtime report $nonNegativeProperty cannot be negative."
+                }
+            }
+
+            if ((Has-Property $report 'p95PlaybackFrameMilliseconds') -and (Has-Property $report 'medianPlaybackFrameMilliseconds') -and
+                [double]$report.p95PlaybackFrameMilliseconds -lt [double]$report.medianPlaybackFrameMilliseconds) {
+                Add-Failure 'BattleScaleLab runtime report p95PlaybackFrameMilliseconds cannot be below the median.'
+            }
+            if ((Has-Property $report 'resolutionSourceClassification') -and
+                $report.resolutionSourceClassification -eq 'presentation.synthetic-deterministic' -and
+                (Has-Property $report 'authoritativeInputDigest') -and
+                -not [string]::IsNullOrWhiteSpace([string]$report.authoritativeInputDigest)) {
+                Add-Failure 'Synthetic BattleScaleLab runtime reports must leave authoritativeInputDigest empty.'
+            }
+            if ((Has-Property $report 'memoryMeasurementAvailable') -and $report.memoryMeasurementAvailable -eq $true) {
+                foreach ($memoryProperty in @('memoryMeasurementSource', 'memoryMeasurementUnit')) {
+                    if ((Has-Property $report $memoryProperty) -and [string]::IsNullOrWhiteSpace([string]$report.$memoryProperty)) {
+                        Add-Failure "BattleScaleLab runtime report $memoryProperty is required when memoryMeasurementAvailable=true."
+                    }
+                }
+            }
+
+            if ((Has-Property $report 'battlefieldProfile') -and (Has-Property $report 'battlefieldDigest') -and (Has-Property $report 'foliageDigest')) {
+                $expectedProfile = $null
+                $expectedSeed = $null
+                $expectedDigest = $null
+                $expectedFoliageDigest = $null
+                if ($report.battlefieldProfile -eq 'battlefield.m2.open-meadow') {
+                    $expectedProfile = 'battlefield.m2.open-meadow'
+                    $expectedSeed = [ulong]5562593449599061847
+                    $expectedDigest = '567f72c3d9e754722839fb8f1fb034fea7d9f647bc66690a36416ed0e7dc5443'
+                    $expectedFoliageDigest = 'adda947b93cd28b4d1170138d5538b419dc4237efcc70f6f19b8baa516c863e6'
+                }
+                elseif ($report.battlefieldProfile -eq 'battlefield.m2.broad-highland') {
+                    $expectedProfile = 'battlefield.m2.broad-highland'
+                    $expectedSeed = [ulong]5562587969321979460
+                    $expectedDigest = '5973015037208b1d09e4d50be3e0353b3bf200dd06fd1a1ccdf77ec4f691326f'
+                    $expectedFoliageDigest = '9a12bd67baf35b084e0fc6c0ee8fa22c6bc9e40ea8706f359d7d239fb3d83d83'
+                }
+                else {
+                    Add-Failure "BattleScaleLab runtime report battlefieldProfile '$($report.battlefieldProfile)' is unsupported."
+                }
+
+                if ($null -ne $expectedProfile) {
+                    if ([string]$report.battlefieldSeed -ne [string]$expectedSeed) { Add-Failure 'BattleScaleLab battlefield seed does not match the selected protected profile.' }
+                    if ([string]$report.battlefieldDigest -ne $expectedDigest) { Add-Failure 'BattleScaleLab battlefield digest does not match the selected protected profile.' }
+                    if ([string]$report.foliageDigest -ne $expectedFoliageDigest) { Add-Failure 'BattleScaleLab foliage digest does not match the selected protected profile.' }
                 }
             }
         }

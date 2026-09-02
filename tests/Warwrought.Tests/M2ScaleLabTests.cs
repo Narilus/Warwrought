@@ -3,6 +3,7 @@ using Warwrought.Battle.Model;
 using Warwrought.Battle.Simulation;
 using Warwrought.Battle.Transcript;
 using Warwrought.Bootstrap;
+using Warwrought.Presentation.Battle;
 using Xunit;
 
 namespace Warwrought.Tests;
@@ -64,13 +65,13 @@ public sealed class M2ScaleLabTests
     }
 
     [Fact]
-    public void ScaleLabArgumentsDeclareOnlyThePhaseOneAuthoritativeScenario()
+    public void ScaleLabArgumentsDeclareAuthoritativeAndPresentationStressScenarios()
     {
         var valid = BattleScaleLabArguments.Parse(
             new[] { "--acceptance=battlescalelab.m2.100v100", "--report=artifacts/local/m2.3/scale.json" });
         var highland = BattleScaleLabArguments.Parse(
             new[] { "--acceptance=battlescalelab.m2.100v100", "--battlefield-profile=battlefield.m2.broad-highland", "--report=artifacts/local/m2.3/scale.json" });
-        var wrongScenario = BattleScaleLabArguments.Parse(
+        var synthetic300 = BattleScaleLabArguments.Parse(
             new[] { "--acceptance=battlescalelab.m2.300v300", "--report=artifacts/local/m2.3/scale.json" });
 
         Assert.True(valid.IsAcceptanceMode);
@@ -78,8 +79,92 @@ public sealed class M2ScaleLabTests
         Assert.Equal(BattleScaleLabArguments.OpenMeadowProfile, valid.BattlefieldProfileId);
         Assert.True(highland.IsAcceptanceMode);
         Assert.Equal(BattleScaleLabArguments.BroadHighlandProfile, highland.BattlefieldProfileId);
-        Assert.False(wrongScenario.IsValid);
-        Assert.Contains("Unsupported acceptance scenario", wrongScenario.ValidationError, StringComparison.Ordinal);
+        Assert.True(synthetic300.IsAcceptanceMode);
+        Assert.Equal(BattleScaleLabArguments.Presentation300Scenario, synthetic300.ScenarioId);
+
+        var visible500 = BattleScaleLabArguments.Parse(
+            new[] { "--scale-scenario=battlescalelab.m2.500v500", "--battlefield-profile=battlefield.m2.broad-highland" });
+        Assert.True(visible500.IsValid);
+        Assert.False(visible500.IsAcceptanceRequested);
+        Assert.Equal(BattleScaleLabArguments.Presentation500Scenario, visible500.ScenarioId);
+        Assert.Equal(BattleScaleLabArguments.BroadHighlandProfile, visible500.BattlefieldProfileId);
+    }
+
+    [Theory]
+    [InlineData(300, "battlescalelab.m2.300v300", "battle.m2.scale.300v300.presentation", 83003, 20, 15)]
+    [InlineData(500, "battlescalelab.m2.500v500", "battle.m2.scale.500v500.presentation", 83005, 25, 20)]
+    public void PresentationStressFixturesAreDeterministicOrderedAndExplicitlyNonAuthoritative(
+        int unitsPerSide,
+        string scenarioId,
+        string battleId,
+        ulong seed,
+        int fileCount,
+        int rankCount)
+    {
+        var first = unitsPerSide == 300
+            ? BattleScalePresentationStressFactory.Create300v300()
+            : BattleScalePresentationStressFactory.Create500v500();
+        var second = unitsPerSide == 300
+            ? BattleScalePresentationStressFactory.Create300v300()
+            : BattleScalePresentationStressFactory.Create500v500();
+
+        Assert.Equal(scenarioId, first.ScenarioId);
+        Assert.Equal(BattleScalePresentationStressFactory.SourceClassification, first.SourceClassification);
+        Assert.Equal(battleId, first.Resolution.Result.BattleId.Value);
+        Assert.Equal(seed, first.Resolution.Result.Seed);
+        Assert.Equal(unitsPerSide, first.RequestedUnitsPerSide);
+        Assert.Equal(unitsPerSide * 2, first.ExpectedTotalUnitCount);
+        Assert.Equal(fileCount, first.FormationFileCount);
+        Assert.Equal(rankCount, first.FormationRankCount);
+        Assert.Equal(first.SourceIdentityDigest, second.SourceIdentityDigest);
+        Assert.Equal(first.Resolution.Transcript.CanonicalDigest, second.Resolution.Transcript.CanonicalDigest);
+        Assert.Equal(first.Resolution.Result.CanonicalDigest, second.Resolution.Result.CanonicalDigest);
+        Assert.Equal(unitsPerSide * 2, first.Resolution.Result.Survivors.Count + first.Resolution.Result.Casualties.Count);
+        Assert.Equal(30, first.Resolution.Result.Casualties.Count);
+        Assert.Equal(first.SourceIdentityDigest, first.Resolution.Transcript.Header.CanonicalInputDigest);
+        Assert.Equal(10, first.Resolution.Transcript.Keyframes.Count);
+        Assert.Equal($"unit.synthetic.a.000", first.Resolution.Transcript.Keyframes[0].Members[0].UnitId.Value);
+        Assert.Equal($"unit.synthetic.b.{unitsPerSide - 1:000}", first.Resolution.Transcript.Keyframes[1].Members[^1].UnitId.Value);
+    }
+
+    [Fact]
+    public void ScaleProfilingWindowExcludesWarmupAndComputesMedianAndP95FromBoundedSamples()
+    {
+        var summary = BattleScaleProfilingMetrics.Summarize(
+            new[] { 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 },
+            warmupDurationMilliseconds: 3.1,
+            sampleWindowDurationMilliseconds: 9.0);
+
+        Assert.Equal(3, summary.WarmupExcludedSampleCount);
+        Assert.Equal(6.0, summary.WarmupExcludedDurationMilliseconds);
+        Assert.Equal(2, summary.Samples.Count);
+        Assert.Equal(9.0, summary.MeasuredSampleWindowDurationMilliseconds);
+        Assert.Equal(4.5, summary.MedianMilliseconds);
+        Assert.Equal(4.95, summary.P95Milliseconds, precision: 10);
+    }
+
+    [Fact]
+    public void ScaleReportValidationRequiresProfilingEvidenceAndRejectsAuthoritativeClaimsForSyntheticSources()
+    {
+        var report = new BattleScaleLabReport
+        {
+            Scenario = BattleScaleLabArguments.Presentation300Scenario,
+            Scene = BattleScaleLab.SceneIdentity,
+            ScenePath = BattleScaleLab.ScenePath,
+            GodotVersion = "4.7.1",
+            BuildRuntimeIdentifier = "test",
+            RuntimeIdentifier = "test",
+            ProjectIdentity = "Warwrought",
+            ProjectVersion = "0.1.0",
+            ResolutionSourceClassification = BattleScalePresentationStressFactory.SourceClassification,
+            AuthoritativeInputDigest = "must-not-be-present",
+            Passed = true,
+        };
+
+        var errors = report.Validate();
+
+        Assert.Contains(errors, error => error.Contains("must not claim an authoritative input digest", StringComparison.Ordinal));
+        Assert.Contains(errors, error => error.Contains("bounded production frame samples", StringComparison.Ordinal));
     }
 
     [Fact]

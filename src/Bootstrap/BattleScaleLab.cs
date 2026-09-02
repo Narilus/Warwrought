@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 using Godot;
 using Warwrought.Battle.Model;
 using Warwrought.Battle.Simulation;
@@ -11,15 +13,22 @@ using Warwrought.Presentation.Battle;
 namespace Warwrought.Bootstrap;
 
 /// <summary>
-/// Maintained production Phase 1 ScaleLab. It commits the deterministic 100v100 fixture,
-/// resolves it once through CommittedBattleResolution, retains that result/transcript pair,
-/// and hands the exact retained resolution to the existing production playback controller.
+/// Maintained production ScaleLab. The 100v100 scenario commits the deterministic fixture,
+/// resolves it once through CommittedBattleResolution, and retains that result/transcript pair.
+/// The larger scenarios use explicit deterministic presentation-only transcripts, then all
+/// scenarios hand their retained resolution to the same production playback controller.
 /// </summary>
 public partial class BattleScaleLab : Node3D
 {
     public const string SceneIdentity = "BattleScaleLab";
     public const string ScenePath = "res://scenes/Labs/BattleScaleLab.tscn";
     public const int ExpectedTotalUnitCount = BattleScaleFixtureFactory.UnitsPerSide * 2;
+    public const double ProfilingWarmupDurationMilliseconds = 750.0;
+    public const double ProfilingSampleWindowDurationMilliseconds = 3_000.0;
+    public const string ProfilingWarmupPolicy = "Exclude the first 750 ms of active production playback; a boundary frame is excluded conservatively.";
+    public const string FrameSampleSource = "Godot BattleScaleLab._Process delta (milliseconds between production frames)";
+    public const string MemoryMeasurementSource = "System.GC.GetTotalMemory(false) after production playback completion";
+    public const string MemoryMeasurementUnit = "bytes of managed .NET heap";
 
     private BattleScaleLabArguments? _arguments;
     private BattleDefinition? _definition;
@@ -36,6 +45,17 @@ public partial class BattleScaleLab : Node3D
     private string? _failureMessage;
     private bool _reportWritten;
     private bool _cameraControlsObserved;
+    private string _resolutionSourceClassification = BattleScaleFixtureFactory.SourceClassification;
+    private string _sourceIdentityDigest = string.Empty;
+    private int _requestedUnitsPerSide = BattleScaleFixtureFactory.UnitsPerSide;
+    private int _expectedPresentationUnitCount = ExpectedTotalUnitCount;
+    private int _actualSideAUnitCount;
+    private int _actualSideBUnitCount;
+    private double _scenePresentationSpawnElapsedMilliseconds;
+    private readonly List<double> _profilingFrameDurations = new();
+    private bool _profilingObservationStarted;
+    private bool _profilingWindowReached;
+    private int _peakRelevantActiveNodeCount;
 
     public override void _Ready()
     {
@@ -46,7 +66,7 @@ public partial class BattleScaleLab : Node3D
             {
                 InitializeProductionBattle();
                 _playbackController!.Play();
-                GD.Print($"BattleScaleLab ready: maintained production 100v100 transcript playback, profile={_battlefieldDefinition?.BattlefieldId.Value}, views={_playbackController.UnitsSpawned}, controls=WASD/wheel/R.");
+                GD.Print($"BattleScaleLab ready: scenario={GetScenarioId()}, source={_resolutionSourceClassification}, profile={_battlefieldDefinition?.BattlefieldId.Value}, views={_playbackController.UnitsSpawned}, controls=WASD/wheel/R.");
                 return;
             }
 
@@ -69,10 +89,23 @@ public partial class BattleScaleLab : Node3D
 
     public override void _Process(double delta)
     {
-        _ = delta;
         if (_arguments?.IsAcceptanceMode != true || _reportWritten || _playbackController is null)
         {
             return;
+        }
+
+        if (_profilingObservationStarted && delta > 0.0 && !_profilingWindowReached)
+        {
+            _profilingFrameDurations.Add(delta * 1_000.0);
+            var totalObservedMilliseconds = 0.0;
+            for (var index = 0; index < _profilingFrameDurations.Count; index++)
+            {
+                totalObservedMilliseconds += _profilingFrameDurations[index];
+            }
+
+            _profilingWindowReached = totalObservedMilliseconds >=
+                                      ProfilingWarmupDurationMilliseconds + ProfilingSampleWindowDurationMilliseconds;
+            ObservePresentationNodeCounts();
         }
 
         if (_playbackController.PlaybackCompleted)
@@ -105,6 +138,7 @@ public partial class BattleScaleLab : Node3D
             _playbackController.SetSpeed(1.0);
             _playbackController.SetSpeed(2.0);
             _playbackController.SetSpeed(8.0);
+            _profilingObservationStarted = true;
             ObserveCameraControls();
         }
         catch (Exception exception)
@@ -118,21 +152,47 @@ public partial class BattleScaleLab : Node3D
     {
         ValidateProductionSceneStructure();
 
-        var fixtureInput = BattleScaleFixtureFactory.Create100v100FixtureInput();
-        if (!BattleDefinition.TryCommit(fixtureInput, out var committedDefinition, out var validation) || committedDefinition is null)
+        var scenarioId = GetScenarioId();
+        if (string.Equals(scenarioId, BattleScaleLabArguments.Presentation300Scenario, StringComparison.Ordinal) ||
+            string.Equals(scenarioId, BattleScaleLabArguments.Presentation500Scenario, StringComparison.Ordinal))
         {
-            throw new BattleDefinitionValidationException(validation);
+            var stressData = string.Equals(scenarioId, BattleScaleLabArguments.Presentation300Scenario, StringComparison.Ordinal)
+                ? BattleScalePresentationStressFactory.Create300v300()
+                : BattleScalePresentationStressFactory.Create500v500();
+            _resolution = stressData.Resolution;
+            _resolutionSourceClassification = stressData.SourceClassification;
+            _sourceIdentityDigest = stressData.SourceIdentityDigest;
+            _requestedUnitsPerSide = stressData.RequestedUnitsPerSide;
+            _expectedPresentationUnitCount = stressData.ExpectedTotalUnitCount;
+            _actualSideAUnitCount = stressData.RequestedUnitsPerSide;
+            _actualSideBUnitCount = stressData.RequestedUnitsPerSide;
+        }
+        else
+        {
+            var fixtureInput = BattleScaleFixtureFactory.Create100v100FixtureInput();
+            if (!BattleDefinition.TryCommit(fixtureInput, out var committedDefinition, out var validation) || committedDefinition is null)
+            {
+                throw new BattleDefinitionValidationException(validation);
+            }
+
+            if (committedDefinition.TotalUnitCount != ExpectedTotalUnitCount)
+            {
+                throw new InvalidOperationException($"ScaleLab committed {committedDefinition.TotalUnitCount} units; expected {ExpectedTotalUnitCount}.");
+            }
+
+            _definition = committedDefinition;
+            _committedBattle = CommittedBattleResolution.Commit(_definition);
+            _skipResult = _committedBattle.SkipToResult();
+            _resolution = _committedBattle.WatchResolution;
+            _resolutionSourceClassification = BattleScaleFixtureFactory.SourceClassification;
+            _sourceIdentityDigest = committedDefinition.CanonicalInputDigest;
+            _requestedUnitsPerSide = BattleScaleFixtureFactory.UnitsPerSide;
+            _expectedPresentationUnitCount = ExpectedTotalUnitCount;
+            _actualSideAUnitCount = committedDefinition.GetSide(new BattleSideId("side.a")).Squads[0].Members.Count;
+            _actualSideBUnitCount = committedDefinition.GetSide(new BattleSideId("side.b")).Squads[0].Members.Count;
         }
 
-        if (committedDefinition.TotalUnitCount != ExpectedTotalUnitCount)
-        {
-            throw new InvalidOperationException($"ScaleLab committed {committedDefinition.TotalUnitCount} units; expected {ExpectedTotalUnitCount}.");
-        }
-
-        _definition = committedDefinition;
-        _committedBattle = CommittedBattleResolution.Commit(_definition);
-        _skipResult = _committedBattle.SkipToResult();
-        _resolution = _committedBattle.WatchResolution;
+        var presentationTimer = Stopwatch.StartNew();
         _battlefieldDefinition = SelectBattlefield(_arguments?.BattlefieldProfileId);
         _presentationProjector = new BattlefieldPresentationProjector(_battlefieldDefinition);
         _terrainView = GetNode<BattlefieldTerrainView>("BattlefieldRoot/TerrainRoot");
@@ -144,6 +204,9 @@ public partial class BattleScaleLab : Node3D
         BindControlSurface(_playbackController);
         BindCameraControlSurface(_cameraRig);
         UpdateTerrainHud();
+        presentationTimer.Stop();
+        _scenePresentationSpawnElapsedMilliseconds = presentationTimer.Elapsed.TotalMilliseconds;
+        ObservePresentationNodeCounts();
     }
 
     private void ValidateProductionSceneStructure()
@@ -210,7 +273,7 @@ public partial class BattleScaleLab : Node3D
                                   _cameraRig.CurrentOrthographicSize > 0.0f &&
                                   _resolution.Result.CanonicalDigest == originalResultDigest &&
                                   _resolution.Transcript.CanonicalDigest == originalTranscriptDigest &&
-                                  _playbackController.UnitsSpawned == ExpectedTotalUnitCount;
+                                  _playbackController.UnitsSpawned == _expectedPresentationUnitCount;
         if (!_cameraControlsObserved)
         {
             throw new InvalidOperationException("ScaleLab camera controls failed to restore a valid orthographic frame or changed authoritative resolution identity.");
@@ -231,8 +294,14 @@ public partial class BattleScaleLab : Node3D
             return;
         }
 
+        var scaleLabel = $"{_requestedUnitsPerSide}v{_requestedUnitsPerSide} / {_expectedPresentationUnitCount} views";
+        GetNode<Label>("BattleHUD/Panel/Content/Title").Text =
+            $"BATTLESCALELAB  //  M2.3 PRODUCTION SCALE  //  {scaleLabel}";
         GetNode<Label>("BattleHUD/Panel/Content/Terrain").Text =
-            $"M2.3 SCALELAB  //  100v100 / 200 views  //  {_battlefieldDefinition.BattlefieldId.Value}  //  mesh {_terrainView.MeshTriangleCount} facets  //  foliage {_terrainView.FoliagePlacementCount}  //  pan/zoom/reset: WASD, wheel, R";
+            $"M2.3 SCALELAB  //  {scaleLabel}  //  {_battlefieldDefinition.BattlefieldId.Value}  //  mesh {_terrainView.MeshTriangleCount} facets  //  foliage {_terrainView.FoliagePlacementCount}  //  pan/zoom/reset: WASD, wheel, R";
+        GetNode<Label>("BattleHUD/Legend/Content/SideA").Text = $"SIDE A  •  ember infantry {_requestedUnitsPerSide}";
+        GetNode<Label>("BattleHUD/Legend/Content/SideB").Text = $"SIDE B  •  azure infantry {_requestedUnitsPerSide}";
+        GetNode<Label>("BattleHUD/Legend/Content/Hint").Text = $"{_expectedPresentationUnitCount} FixedY views • red hit flash • remains";
     }
 
     private void CompleteAcceptance(BattleScaleLabArguments arguments, bool passed, int processExitCode)
@@ -322,8 +391,13 @@ public partial class BattleScaleLab : Node3D
                                   watchedResult is not null &&
                                   resolutionIdentityShared &&
                                   _skipResult.IsExactlyEqualTo(watchedResult);
-        var actualSideAUnitCount = _definition?.GetSide(new BattleSideId("side.a")).Squads[0].Members.Count ?? 0;
-        var actualSideBUnitCount = _definition?.GetSide(new BattleSideId("side.b")).Squads[0].Members.Count ?? 0;
+        var profilingSummary = _profilingFrameDurations.Count > 0
+            ? BattleScaleProfilingMetrics.Summarize(
+                _profilingFrameDurations,
+                ProfilingWarmupDurationMilliseconds,
+                ProfilingSampleWindowDurationMilliseconds)
+            : null;
+        ObservePresentationNodeCounts();
 
         return new BattleScaleLabReport
         {
@@ -338,23 +412,46 @@ public partial class BattleScaleLab : Node3D
             BattleId = result?.BattleId.Value ?? string.Empty,
             Seed = result?.Seed ?? 0,
             SimulationVersion = result is null ? string.Empty : $"{result.SimulationVersion.Major}.{result.SimulationVersion.Minor}",
-            AuthoritativeInputDigest = transcript?.Header.CanonicalInputDigest ?? string.Empty,
+            AuthoritativeInputDigest = _resolutionSourceClassification == BattleScaleFixtureFactory.SourceClassification
+                ? transcript?.Header.CanonicalInputDigest ?? string.Empty
+                : string.Empty,
+            SourceIdentityDigest = _sourceIdentityDigest,
             TranscriptDigest = transcript?.CanonicalDigest ?? string.Empty,
             ResultDigest = result?.CanonicalDigest ?? string.Empty,
             Result = result?.ResultType.ToString() ?? string.Empty,
-            ResolutionSourceClassification = BattleScaleFixtureFactory.SourceClassification,
+            ResolutionSourceClassification = _resolutionSourceClassification,
             AuthoritativeResolutionRetained = _committedBattle is not null &&
                                               _resolution is not null &&
                                               ReferenceEquals(_committedBattle.Resolution, _resolution),
             ResolutionIdentityShared = resolutionIdentityShared,
             SkipWatchEquivalent = skipWatchEquivalent,
-            RequestedUnitsPerSide = BattleScaleFixtureFactory.UnitsPerSide,
-            ExpectedTotalUnitCount = ExpectedTotalUnitCount,
-            ActualSideAUnitCount = actualSideAUnitCount,
-            ActualSideBUnitCount = actualSideBUnitCount,
-            ActualTotalUnitCount = actualSideAUnitCount + actualSideBUnitCount,
+            RequestedUnitsPerSide = _requestedUnitsPerSide,
+            ExpectedTotalUnitCount = _expectedPresentationUnitCount,
+            ActualSideAUnitCount = _actualSideAUnitCount,
+            ActualSideBUnitCount = _actualSideBUnitCount,
+            ActualTotalUnitCount = _actualSideAUnitCount + _actualSideBUnitCount,
             UnitsSpawned = controller?.UnitsSpawned ?? 0,
             ProjectedUnitCount = controller?.UnitProjectionCount ?? 0,
+            ActiveUnitViewCount = controller?.ActiveUnitViewCount ?? 0,
+            ActiveRemainsViewCount = controller?.ActiveRemainsViewCount ?? 0,
+            ActiveEffectViewCount = controller?.ActiveEffectViewCount ?? 0,
+            RelevantActiveNodeCount = GetRelevantActiveNodeCount(),
+            PeakRelevantActiveNodeCount = _peakRelevantActiveNodeCount,
+            EffectsSpawned = controller?.EffectsSpawned ?? 0,
+            ScenePresentationSpawnElapsedMilliseconds = _scenePresentationSpawnElapsedMilliseconds,
+            FrameSampleSource = FrameSampleSource,
+            ProfilingPlaybackSpeed = controller?.Playback.Clock.Speed ?? 0.0,
+            WarmupPolicy = ProfilingWarmupPolicy,
+            FrameSampleCount = profilingSummary?.Samples.Count ?? 0,
+            MeasuredSampleWindowDurationMilliseconds = profilingSummary?.MeasuredSampleWindowDurationMilliseconds ?? 0.0,
+            WarmupExcludedSampleCount = profilingSummary?.WarmupExcludedSampleCount ?? 0,
+            WarmupExcludedDurationMilliseconds = profilingSummary?.WarmupExcludedDurationMilliseconds ?? 0.0,
+            MedianPlaybackFrameMilliseconds = profilingSummary?.MedianMilliseconds ?? 0.0,
+            P95PlaybackFrameMilliseconds = profilingSummary?.P95Milliseconds ?? 0.0,
+            MemoryMeasurementAvailable = true,
+            MemoryMeasurementSource = MemoryMeasurementSource,
+            MemoryMeasurementUnit = MemoryMeasurementUnit,
+            MemoryBytes = GC.GetTotalMemory(forceFullCollection: false),
             TranscriptEventCount = transcript?.EventCount ?? 0,
             TranscriptKeyframeCount = transcript?.KeyframeCount ?? 0,
             TranscriptEventsConsumed = controller?.TranscriptEventsConsumed ?? 0,
@@ -387,6 +484,36 @@ public partial class BattleScaleLab : Node3D
             FailureCategory = passed && _unexpectedErrors == 0 ? null : _failureCategory ?? "AcceptanceFailure",
             FailureMessage = passed && _unexpectedErrors == 0 ? null : _failureMessage ?? "BattleScaleLab acceptance did not pass.",
         };
+    }
+
+    private string GetScenarioId()
+    {
+        return _arguments?.ScenarioId ?? BattleScaleLabArguments.AcceptanceScenario;
+    }
+
+    private void ObservePresentationNodeCounts()
+    {
+        var activeNodeCount = GetRelevantActiveNodeCount();
+        if (activeNodeCount > _peakRelevantActiveNodeCount)
+        {
+            _peakRelevantActiveNodeCount = activeNodeCount;
+        }
+    }
+
+    private int GetRelevantActiveNodeCount()
+    {
+        if (_playbackController is null)
+        {
+            return 0;
+        }
+
+        var unitRoot = GetNode<Node3D>("BattlefieldRoot/UnitRoot");
+        var remainsRoot = GetNode<Node3D>("BattlefieldRoot/RemainsRoot");
+        var effectsRoot = GetNode<Node3D>("BattlefieldRoot/EffectsRoot");
+        var foliageRoot = GetNode<Node3D>("BattlefieldRoot/TerrainRoot/FoliageRoot");
+        var propsRoot = GetNode<Node3D>("BattlefieldRoot/TerrainRoot/PropsRoot");
+        return unitRoot.GetChildCount() + remainsRoot.GetChildCount() + effectsRoot.GetChildCount() +
+               foliageRoot.GetChildCount() + propsRoot.GetChildCount();
     }
 
     private void RecordFailure(string category, string message, bool countAsUnexpectedError)

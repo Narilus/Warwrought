@@ -1,15 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Warwrought.Presentation.Battle;
 
 namespace Warwrought.Bootstrap;
 
 /// <summary>
-/// Narrow command-line contract for the maintained 100v100 ScaleLab production scene.
+/// Narrow command-line contract for the maintained ScaleLab production scene. Acceptance uses
+/// --acceptance plus an explicit report; --scale-scenario selects a normal visible playback.
 /// </summary>
 public sealed class BattleScaleLabArguments
 {
     public const string AcceptanceScenario = "battlescalelab.m2.100v100";
+    public const string Presentation300Scenario = BattleScalePresentationStressFactory.Presentation300Scenario;
+    public const string Presentation500Scenario = BattleScalePresentationStressFactory.Presentation500Scenario;
     public const string OpenMeadowProfile = BattleLabArguments.OpenMeadowProfile;
     public const string BroadHighlandProfile = BattleLabArguments.BroadHighlandProfile;
 
@@ -52,6 +56,7 @@ public sealed class BattleScaleLabArguments
         string? reportPath = null;
         string? battlefieldProfileId = null;
         var sawAcceptanceOption = false;
+        var sawScaleScenarioOption = false;
         var sawReportOption = false;
         var sawProfileOption = false;
 
@@ -82,6 +87,18 @@ public sealed class BattleScaleLabArguments
                 continue;
             }
 
+            if (TryReadOption(userArguments, ref index, argument, "--scale-scenario", out var scaleScenarioValue))
+            {
+                if (sawScaleScenarioOption)
+                {
+                    errors.Add("--scale-scenario was supplied more than once.");
+                }
+
+                sawScaleScenarioOption = true;
+                scenarioId = scaleScenarioValue;
+                continue;
+            }
+
             if (TryReadOption(userArguments, ref index, argument, "--battlefield-profile", out var profileValue))
             {
                 if (sawProfileOption)
@@ -105,18 +122,32 @@ public sealed class BattleScaleLabArguments
             return new BattleScaleLabArguments(false, true, null, OpenMeadowProfile, null, null);
         }
 
-        if (!sawAcceptanceOption && !sawReportOption && sawProfileOption && errors.Count == 0)
+        if (!sawAcceptanceOption && !sawReportOption && (sawProfileOption || sawScaleScenarioOption) && errors.Count == 0)
+        {
+            if (sawScaleScenarioOption && !IsSupportedScenario(scenarioId))
+            {
+                errors.Add($"Unsupported scale scenario '{scenarioId}'. Expected '{AcceptanceScenario}', '{Presentation300Scenario}', or '{Presentation500Scenario}'.");
+            }
+            else
+            {
+                return new BattleScaleLabArguments(false, true, scenarioId, battlefieldProfileId, null, null);
+            }
+        }
+
+        if (!sawAcceptanceOption && !sawReportOption && sawProfileOption && !sawScaleScenarioOption && errors.Count == 0)
         {
             return new BattleScaleLabArguments(false, true, null, battlefieldProfileId, null, null);
         }
 
         if (!sawAcceptanceOption || string.IsNullOrWhiteSpace(scenarioId))
         {
-            errors.Add($"Acceptance mode requires --acceptance={AcceptanceScenario}.");
+            errors.Add($"Acceptance mode requires --acceptance={AcceptanceScenario}, {Presentation300Scenario}, or {Presentation500Scenario}.");
         }
-        else if (!string.Equals(scenarioId, AcceptanceScenario, StringComparison.Ordinal))
+        else if (!string.Equals(scenarioId, AcceptanceScenario, StringComparison.Ordinal) &&
+                 !string.Equals(scenarioId, Presentation300Scenario, StringComparison.Ordinal) &&
+                 !string.Equals(scenarioId, Presentation500Scenario, StringComparison.Ordinal))
         {
-            errors.Add($"Unsupported acceptance scenario '{scenarioId}'. Expected '{AcceptanceScenario}'.");
+            errors.Add($"Unsupported acceptance scenario '{scenarioId}'. Expected '{AcceptanceScenario}', '{Presentation300Scenario}', or '{Presentation500Scenario}'.");
         }
 
         if (string.IsNullOrWhiteSpace(battlefieldProfileId))
@@ -183,5 +214,12 @@ public sealed class BattleScaleLabArguments
         index++;
         value = arguments[index];
         return true;
+    }
+
+    private static bool IsSupportedScenario(string? scenarioId)
+    {
+        return string.Equals(scenarioId, AcceptanceScenario, StringComparison.Ordinal) ||
+               string.Equals(scenarioId, Presentation300Scenario, StringComparison.Ordinal) ||
+               string.Equals(scenarioId, Presentation500Scenario, StringComparison.Ordinal);
     }
 }

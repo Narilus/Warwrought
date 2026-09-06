@@ -1,6 +1,6 @@
 # M2 — Procedural 2.5D Battlefield & Rendering Scale
 
-- **Status:** Planned; M2.1 is **READY**
+- **Status:** Complete; M2.1–M2.3 and the M2 gate are complete
 - **Source milestone:** `plans/implementation_plan.md` §11
 - **Depends on:** M0 and M1 complete, including the frozen operations contract and accepted M1 authority boundary
 - **Completes before:** M3 combat/doctrine breadth and all campaign/faction work
@@ -15,11 +15,11 @@ M1's battle is already authoritative and complete. M2 adds no new combat decisio
 
 | Order | Task | Status | Dependency | Purpose |
 |---|---|---|---|---|
-| 1 | [M2.1 Deterministic battlefield data and height field](M2.1_deterministic-battlefield-data-and-heightfield.md) | **READY** | M1 accepted | Establish validated seed-driven battlefield data, height/region/deployment queries, and reproducible terrain identity without changing M1 combat. |
-| 2 | [M2.2 Production terrain, foliage, and camera integration](M2.2_production-terrain-foliage-and-camera.md) | Planned | M2.1 accepted | Make the production BattleLab consume M2 data for low-poly terrain, height-projected billboards, decorative foliage/props, lighting, and camera control. |
-| 3 | [M2.3 Scale lab, profiling, and M2 gate](M2.3_scale-lab-profiling-and-m2-gate.md) | Planned | M2.2 accepted | Measure normal-node presentation at 100v100, 300v300, and 500v500; prove the real runtime/exported player and retain M1 regressions. |
+| 1 | [M2.1 Deterministic battlefield data and height field](M2.1_deterministic-battlefield-data-and-heightfield.md) | **Complete** | M1 accepted | Establish validated seed-driven battlefield data, height/region/deployment queries, and reproducible terrain identity without changing M1 combat. |
+| 2 | [M2.2 Production terrain, foliage, and camera integration](M2.2_production-terrain-foliage-and-camera.md) | **Complete** | M2.1 accepted | Make the production BattleLab consume M2 data for low-poly terrain, height-projected billboards, decorative foliage/props, lighting, and camera control. |
+| 3 | [M2.3 Scale lab, profiling, and M2 gate](M2.3_scale-lab-profiling-and-m2-gate.md) | **Complete** | M2.2 accepted | Measure normal-node presentation at 100v100, 300v300, and 500v500; prove the real runtime/exported player and retain M1 regressions. |
 
-Only M2.1 is ready now. Planner activates each later packet after its predecessor is accepted. A Builder may not weaken an activated packet's objective, required behaviour, acceptance criteria, or non-goals.
+M2.1 through M2.3 and the M2 gate have passed their required production, regression, visible-runtime, and exported-player evidence. M3 remains unstarted. A Builder may not weaken an activated packet's objective, required behaviour, acceptance criteria, or non-goals.
 
 ## Milestone-wide contracts
 

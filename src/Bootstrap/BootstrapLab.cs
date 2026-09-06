@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -20,6 +21,16 @@ public partial class BootstrapLab : Node
         try
         {
             var userArguments = OS.GetCmdlineUserArgs();
+
+            // Exported Godot players use the configured main scene and do not support the
+            // editor-only --scene path override. Route declared ScaleLab acceptance/visible
+            // scenarios into the maintained BattleScaleLab production scene before parsing
+            // BootstrapLab arguments. BattleScaleLab owns the real scale presentation path.
+            if (IsBattleScaleLabRequest(userArguments))
+            {
+                GetTree().CallDeferred("change_scene_to_file", BattleScaleLab.ScenePath);
+                return;
+            }
 
             // Exported Godot players use the configured main scene and do not support the
             // editor-only --scene path override. Route the declared M1 acceptance scenario into
@@ -50,6 +61,20 @@ public partial class BootstrapLab : Node
             GD.PushError($"BootstrapLab bootstrap exception: {exception}");
             GetTree().Quit(1);
         }
+    }
+
+    private static bool IsBattleScaleLabRequest(IReadOnlyList<string> userArguments)
+    {
+        foreach (var argument in userArguments)
+        {
+            if (argument.StartsWith("--scale-scenario", StringComparison.Ordinal) ||
+                argument.StartsWith("--acceptance=battlescalelab.", StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void RunAcceptance(BootstrapLabArguments arguments)

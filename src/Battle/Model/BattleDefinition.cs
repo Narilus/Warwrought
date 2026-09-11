@@ -174,7 +174,7 @@ public sealed record BattleSquad
 }
 
 /// <summary>
-/// Immutable committed side. M1.1 permits exactly one squad per side.
+/// Immutable committed side. M3.1 permits one or more independently ordered squads per side.
 /// </summary>
 public sealed record BattleSide
 {
@@ -190,7 +190,7 @@ public sealed record BattleSide
 }
 
 /// <summary>
-/// Immutable authoritative input boundary for the narrow M1 fixture.
+/// Immutable authoritative input boundary for the fixed-tick battle fixtures.
 /// It is committed only after all cross-references, ordered members, deployment, and layout invariants pass.
 /// </summary>
 public sealed record BattleDefinition
@@ -291,13 +291,13 @@ public sealed record BattleDefinition
                 continue;
             }
 
-            if (side.Squads.Count != 1)
+            if (side.Squads.Count < 1)
             {
                 Add(
                     errors,
                     BattleValidationCode.InvalidSquadCount,
                     $"sides[{sideIndex}].squads",
-                    $"M1 supports exactly one squad/formation per side; received {side.Squads.Count}.");
+                    $"At least one squad/formation is required per side; received {side.Squads.Count}.");
             }
 
             for (var squadIndex = 0; squadIndex < side.Squads.Count; squadIndex++)

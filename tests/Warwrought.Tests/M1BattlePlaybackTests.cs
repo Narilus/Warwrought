@@ -98,6 +98,8 @@ public sealed class M1BattlePlaybackTests
             new[] { "--acceptance=battlelab.m2.open-meadow", "--report=artifacts/local/m2.2/report.json" });
         var highland = BattleLabArguments.Parse(
             new[] { "--acceptance=battlelab.m2.broad-highland", "--battlefield-profile=battlefield.m2.broad-highland", "--report=artifacts/local/m2.2/report.json" });
+        var multiFormation = BattleLabArguments.Parse(
+            new[] { "--acceptance=battlelab.m3.multiformation", "--report=artifacts/local/m3.1/report.json" });
         var normalHighland = BattleLabArguments.Parse(
             new[] { "--battlefield-profile=battlefield.m2.broad-highland" });
         var wrongScenario = BattleLabArguments.Parse(
@@ -113,6 +115,9 @@ public sealed class M1BattlePlaybackTests
         Assert.Equal(BattleLabArguments.OpenMeadowProfile, meadow.BattlefieldProfileId);
         Assert.True(highland.IsAcceptanceMode);
         Assert.Equal(BattleLabArguments.BroadHighlandProfile, highland.BattlefieldProfileId);
+        Assert.True(multiFormation.IsAcceptanceMode);
+        Assert.Equal(BattleLabArguments.MultiFormationScenario, multiFormation.ScenarioId);
+        Assert.Equal(BattleLabArguments.OpenMeadowProfile, multiFormation.BattlefieldProfileId);
         Assert.True(normalHighland.IsValid);
         Assert.False(normalHighland.IsAcceptanceRequested);
         Assert.Equal(BattleLabArguments.BroadHighlandProfile, normalHighland.BattlefieldProfileId);

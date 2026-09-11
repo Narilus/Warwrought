@@ -47,6 +47,11 @@ public enum BattleFormationState
     Routing,
     Retreated,
     Defeated,
+    /// <summary>
+    /// This formation retains live members but has no legal unresolved opponent
+    /// after its fixed M3 pair has reached a terminal outcome.
+    /// </summary>
+    Secured,
 }
 
 /// <summary>

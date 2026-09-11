@@ -80,6 +80,16 @@ public sealed class BattleLabReport
 
     public int SideBUnitCount { get; init; }
 
+    public int FormationCount { get; init; }
+
+    public int SideASquadCount { get; init; }
+
+    public int SideBSquadCount { get; init; }
+
+    public int FormationContactPairCount { get; init; }
+
+    public int FormationKeyframeIdentityCount { get; init; }
+
     public int TranscriptEventCount { get; init; }
 
     public int TranscriptKeyframeCount { get; init; }
@@ -246,6 +256,19 @@ public sealed class BattleLabReport
         if (RetreatedUnitCount > SurvivorCount)
         {
             errors.Add("Retreated units must be a subset of authoritative survivors.");
+        }
+
+        if (string.Equals(Scenario, BattleLabArguments.MultiFormationScenario, StringComparison.Ordinal))
+        {
+            if (FormationCount != 6 || SideASquadCount != 3 || SideBSquadCount != 3)
+            {
+                errors.Add("M3.1 acceptance requires exactly three committed formations per side.");
+            }
+
+            if (FormationContactPairCount < 3 || FormationKeyframeIdentityCount != FormationCount)
+            {
+                errors.Add("M3.1 acceptance requires three distinct formation contacts and keyframes for every formation.");
+            }
         }
 
         if (TranscriptEventCount <= 0 || TranscriptKeyframeCount <= 0)

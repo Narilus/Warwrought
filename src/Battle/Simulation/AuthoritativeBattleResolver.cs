@@ -8,14 +8,14 @@ using Warwrought.Core;
 namespace Warwrought.Battle.Simulation;
 
 /// <summary>
-/// The single public M1 authoritative resolution entry point. It accepts only the immutable
+/// The single public authoritative resolution entry point. It accepts only the immutable
 /// committed <see cref="BattleDefinition"/>; all mutable combat state is private to one run.
 /// No Godot nodes, scene lifecycle, render timing, physics, or presentation state participate.
 /// </summary>
 public static class AuthoritativeBattleResolver
 {
     /// <summary>
-    /// Resolves one validated committed definition through the bounded fixed-tick M1 fixture.
+    /// Resolves one validated committed definition through the bounded fixed-tick fixture rules.
     /// The returned result and transcript are produced together and share one canonical digest.
     /// </summary>
     public static BattleResolution Resolve(BattleDefinition definition)
@@ -23,7 +23,7 @@ public static class AuthoritativeBattleResolver
         ArgumentNullException.ThrowIfNull(definition);
 
         // BattleDefinition can only be constructed through its validating commitment boundary.
-        // Keep this guard explicit so a future version cannot accidentally enter the M1 loop.
+        // Keep this guard explicit so a future version cannot accidentally enter this fixture loop.
         if (definition.SimulationVersion != M1BattleSettings.SimulationVersion)
         {
             throw new ArgumentException(
@@ -50,11 +50,11 @@ public static class AuthoritativeBattleResolver
         private readonly DeterministicRng _rng;
         private readonly Dictionary<string, FixtureUnitDefinition> _fixtureDefinitions;
         private readonly List<MutableFormationState> _formations = new();
+        private readonly List<FormationPairState> _formationPairs = new();
         private readonly Dictionary<string, MutableUnitState> _unitsById = new(StringComparer.Ordinal);
         private readonly List<BattleSemanticEvent> _events = new();
         private readonly List<BattleFormationKeyframe> _keyframes = new();
         private readonly BattleTranscriptHeader _header;
-        private bool _contactActive;
         private bool _keyframeRequested;
         private long _lastKeyframeTick = -1;
 
@@ -99,6 +99,8 @@ public static class AuthoritativeBattleResolver
                 }
             }
 
+            BuildFormationPairs();
+
             _header = new BattleTranscriptHeader(
                 definition.BattleId,
                 definition.SimulationVersion,
@@ -124,12 +126,12 @@ public static class AuthoritativeBattleResolver
                 _keyframeRequested = false;
 
                 AdvanceFormations(tick);
-                UpdateContactState(tick);
+                UpdateContactStates(tick);
 
-                if (_contactActive)
+                if (AnyContactActive)
                 {
                     ResolveMelee(tick);
-                    UpdateContactState(tick);
+                    UpdateContactStates(tick);
                 }
 
                 var terminal = TryGetTerminalOutcome(out var resultType, out var winnerSideId, out var terminalReason);
@@ -145,8 +147,37 @@ public static class AuthoritativeBattleResolver
             }
 
             var capTick = new SimulationTick(M1BattleSettings.MaximumSimulationTicks - 1L);
-            UpdateContactState(capTick);
+            UpdateContactStates(capTick);
             return Finish(capTick, BattleResultType.NonTerminalFailure, winnerSideId: null, isTerminal: false, SafetyCapReason);
+        }
+
+        private bool AnyContactActive
+        {
+            get
+            {
+                for (var index = 0; index < _formationPairs.Count; index++)
+                {
+                    if (_formationPairs[index].ContactActive)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
+
+        private void BuildFormationPairs()
+        {
+            var firstSide = _definition.Sides[0];
+            var secondSide = _definition.Sides[1];
+            var pairCount = Math.Min(firstSide.Squads.Count, secondSide.Squads.Count);
+            for (var index = 0; index < pairCount; index++)
+            {
+                _formationPairs.Add(new FormationPairState(
+                    FindFormation(firstSide.Squads[index].Id),
+                    FindFormation(secondSide.Squads[index].Id)));
+            }
         }
 
         private void AdvanceFormations(SimulationTick tick)
@@ -165,7 +196,7 @@ public static class AuthoritativeBattleResolver
                     continue;
                 }
 
-                if (formation.State != BattleFormationState.Advancing || _contactActive)
+                if (formation.State != BattleFormationState.Advancing || IsFormationInActiveContact(formation))
                 {
                     continue;
                 }
@@ -224,73 +255,121 @@ public static class AuthoritativeBattleResolver
             return checked(current + (difference > 0 ? stepUnits : -stepUnits));
         }
 
-        private void UpdateContactState(SimulationTick tick)
+        private void UpdateContactStates(SimulationTick tick)
         {
-            var shouldBeInContact = _formations.Count == 2 && AreFormationFootprintsInContact(_formations[0], _formations[1]);
-            if (!_contactActive && shouldBeInContact)
+            for (var pairIndex = 0; pairIndex < _formationPairs.Count; pairIndex++)
             {
-                _contactActive = true;
-                for (var index = 0; index < _formations.Count; index++)
+                var pair = _formationPairs[pairIndex];
+                var shouldBeInContact = AreFormationFootprintsInContact(pair.Left, pair.Right);
+                if (!pair.ContactActive && shouldBeInContact)
                 {
-                    if (_formations[index].State == BattleFormationState.Advancing)
+                    pair.ContactActive = true;
+                    if (pair.Left.State == BattleFormationState.Advancing)
                     {
-                        _formations[index].State = BattleFormationState.Engaged;
+                        pair.Left.State = BattleFormationState.Engaged;
                     }
-                }
 
-                AddEvent(
-                    tick,
-                    BattleEventType.ContactStarted,
-                    sideId: _formations[0].Side.Id,
-                    squadId: _formations[0].Squad.Id,
-                    otherSideId: _formations[1].Side.Id,
-                    otherSquadId: _formations[1].Squad.Id,
-                    reason: ContactReason);
-                _keyframeRequested = true;
+                    if (pair.Right.State == BattleFormationState.Advancing)
+                    {
+                        pair.Right.State = BattleFormationState.Engaged;
+                    }
+
+                    AddEvent(
+                        tick,
+                        BattleEventType.ContactStarted,
+                        sideId: pair.Left.Side.Id,
+                        squadId: pair.Left.Squad.Id,
+                        otherSideId: pair.Right.Side.Id,
+                        otherSquadId: pair.Right.Squad.Id,
+                        reason: ContactReason);
+                    _keyframeRequested = true;
+                }
+                else if (pair.ContactActive && !shouldBeInContact)
+                {
+                    EndContact(pair, tick, "formation_left_contact_footprint_or_became_inactive");
+                }
             }
-            else if (_contactActive && !shouldBeInContact)
-            {
-                EndContact(tick, "formation_left_contact_footprint_or_became_inactive");
-            }
+
+            MarkMultiFormationPairSurvivorsSecured();
         }
 
-        private void EndContact(SimulationTick tick, string reason)
+        private void MarkMultiFormationPairSurvivorsSecured()
         {
-            if (!_contactActive)
+            // M1 has one pair and retains its established terminal semantics and digest.
+            // M3's fixed pairs have no legal cross-pair target, so a live survivor becomes
+            // terminal-ready only after its paired opponent is genuinely resolved. A
+            // Routing formation is deliberately left alone until CompleteRetreat runs.
+            if (_formationPairs.Count <= 1)
             {
                 return;
             }
 
-            _contactActive = false;
+            for (var pairIndex = 0; pairIndex < _formationPairs.Count; pairIndex++)
+            {
+                var pair = _formationPairs[pairIndex];
+                if (IsFormationResolved(pair.Left) && CanBecomeSecured(pair.Right))
+                {
+                    pair.Right.State = BattleFormationState.Secured;
+                    _keyframeRequested = true;
+                }
+
+                if (IsFormationResolved(pair.Right) && CanBecomeSecured(pair.Left))
+                {
+                    pair.Left.State = BattleFormationState.Secured;
+                    _keyframeRequested = true;
+                }
+            }
+        }
+
+        private static bool CanBecomeSecured(MutableFormationState formation)
+        {
+            return formation.State is BattleFormationState.Advancing or BattleFormationState.Engaged;
+        }
+
+        private void EndContact(FormationPairState pair, SimulationTick tick, string reason)
+        {
+            if (!pair.ContactActive)
+            {
+                return;
+            }
+
+            pair.ContactActive = false;
             AddEvent(
                 tick,
                 BattleEventType.ContactEnded,
-                sideId: _formations[0].Side.Id,
-                squadId: _formations[0].Squad.Id,
-                otherSideId: _formations[1].Side.Id,
-                otherSquadId: _formations[1].Squad.Id,
+                sideId: pair.Left.Side.Id,
+                squadId: pair.Left.Squad.Id,
+                otherSideId: pair.Right.Side.Id,
+                otherSquadId: pair.Right.Squad.Id,
                 reason: reason);
             _keyframeRequested = true;
         }
 
         private void ResolveMelee(SimulationTick tick)
         {
-            var left = _formations[0];
-            var right = _formations[1];
-            var pairs = BuildFrontRankPairs(left, right);
-
-            for (var pairIndex = 0; pairIndex < pairs.Count; pairIndex++)
+            for (var formationPairIndex = 0; formationPairIndex < _formationPairs.Count; formationPairIndex++)
             {
-                var pair = pairs[pairIndex];
-                ResolveAttack(pair.Left, pair.Right, tick);
-                ResolveAttack(pair.Right, pair.Left, tick);
+                var formationPair = _formationPairs[formationPairIndex];
+                if (!formationPair.ContactActive)
+                {
+                    continue;
+                }
+
+                var frontRankPairs = BuildFrontRankPairs(formationPair.Left, formationPair.Right);
+                for (var pairIndex = 0; pairIndex < frontRankPairs.Count; pairIndex++)
+                {
+                    var pair = frontRankPairs[pairIndex];
+                    ResolveAttack(pair.Left, pair.Right, tick);
+                    ResolveAttack(pair.Right, pair.Left, tick);
+                }
             }
         }
 
-        private List<FrontRankPair> BuildFrontRankPairs(MutableFormationState left, MutableFormationState right)
+        private static List<FrontRankPair> BuildFrontRankPairs(MutableFormationState left, MutableFormationState right)
         {
-            var leftFront = GetFrontRankMembers(left);
-            var rightFront = GetFrontRankMembers(right);
+            var opposingAxis = GetOpposingAxis(left, right);
+            var leftFront = GetFrontRankMembers(left, opposingAxis);
+            var rightFront = GetFrontRankMembers(right, opposingAxis);
             var pairCount = Math.Min(leftFront.Count, rightFront.Count);
             var pairs = new List<FrontRankPair>(pairCount);
             for (var index = 0; index < pairCount; index++)
@@ -301,7 +380,7 @@ public static class AuthoritativeBattleResolver
             return pairs;
         }
 
-        private List<MutableUnitState> GetFrontRankMembers(MutableFormationState formation)
+        private static List<MutableUnitState> GetFrontRankMembers(MutableFormationState formation, int opposingAxis)
         {
             var members = new List<MutableUnitState>();
             for (var index = 0; index < formation.Members.Count; index++)
@@ -317,8 +396,8 @@ public static class AuthoritativeBattleResolver
             // facings by the same physical file rather than by each formation's local file index.
             members.Sort((first, second) =>
             {
-                var lateralComparison = GetLateralCoordinate(first.Position, _currentOpposingAxis()).CompareTo(
-                    GetLateralCoordinate(second.Position, _currentOpposingAxis()));
+                var lateralComparison = GetLateralCoordinate(first.Position, opposingAxis).CompareTo(
+                    GetLateralCoordinate(second.Position, opposingAxis));
                 return lateralComparison != 0
                     ? lateralComparison
                     : first.Definition.Id.CompareTo(second.Definition.Id);
@@ -326,14 +405,27 @@ public static class AuthoritativeBattleResolver
             return members;
         }
 
-        private int _currentOpposingAxis()
+        private bool IsFormationInActiveContact(MutableFormationState formation)
         {
-            // M1's two formations advance on the axis separating their anchors. The resolver
-            // uses Z for the canonical fixture and retains the X alternative for valid narrow
-            // test definitions without introducing a general spatial framework.
-            return _formations.Count == 2 &&
-                   Math.Abs((long)_formations[1].Anchor.X - _formations[0].Anchor.X) >
-                   Math.Abs((long)_formations[1].Anchor.Z - _formations[0].Anchor.Z)
+            for (var index = 0; index < _formationPairs.Count; index++)
+            {
+                var pair = _formationPairs[index];
+                if (pair.ContactActive && (ReferenceEquals(pair.Left, formation) || ReferenceEquals(pair.Right, formation)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static int GetOpposingAxis(MutableFormationState left, MutableFormationState right)
+        {
+            // The fixture pairs advance on the axis separating their anchors. This retains
+            // M1's Z engagement corridor and supports the narrow X-oriented test definitions
+            // without introducing a general spatial framework.
+            return Math.Abs((long)right.Anchor.X - left.Anchor.X) >
+                   Math.Abs((long)right.Anchor.Z - left.Anchor.Z)
                 ? 1
                 : 0;
         }
@@ -503,12 +595,7 @@ public static class AuthoritativeBattleResolver
 
         private bool TryGetTerminalOutcome(out BattleResultType resultType, out BattleSideId? winnerSideId, out string reason)
         {
-            var first = _formations[0];
-            var second = _formations[1];
-            var firstResolved = first.State is BattleFormationState.Defeated or BattleFormationState.Retreated;
-            var secondResolved = second.State is BattleFormationState.Defeated or BattleFormationState.Retreated;
-
-            if (!firstResolved && !secondResolved)
+            if (!AreAllRelevantFormationPairsResolved())
             {
                 resultType = default;
                 winnerSideId = null;
@@ -516,30 +603,131 @@ public static class AuthoritativeBattleResolver
                 return false;
             }
 
+            var firstSide = _definition.Sides[0];
+            var secondSide = _definition.Sides[1];
+            var firstResolved = IsSideResolved(firstSide);
+            var secondResolved = IsSideResolved(secondSide);
+
             if (firstResolved && secondResolved)
             {
                 resultType = BattleResultType.Draw;
                 winnerSideId = null;
-                reason = "both formations were defeated or completed retreat";
+                reason = firstSide.Squads.Count == 1 && secondSide.Squads.Count == 1
+                    ? "both formations were defeated or completed retreat"
+                    : "all formations reached terminal-ready paired outcomes";
                 return true;
             }
 
             if (firstResolved)
             {
                 resultType = BattleResultType.SideBWin;
-                winnerSideId = second.Side.Id;
-                reason = first.State == BattleFormationState.Defeated
-                    ? "side.a formation was defeated"
-                    : "side.a formation completed retreat";
+                winnerSideId = secondSide.Id;
+                reason = GetSideResolutionReason(firstSide, sideLabel: "side.a");
                 return true;
             }
 
-            resultType = BattleResultType.SideAWin;
-            winnerSideId = first.Side.Id;
-            reason = second.State == BattleFormationState.Defeated
-                ? "side.b formation was defeated"
-                : "side.b formation completed retreat";
+            if (secondResolved)
+            {
+                resultType = BattleResultType.SideAWin;
+                winnerSideId = firstSide.Id;
+                reason = GetSideResolutionReason(secondSide, sideLabel: "side.b");
+                return true;
+            }
+
+            resultType = BattleResultType.Draw;
+            winnerSideId = null;
+            reason = "paired formations reached mixed resolved outcomes";
             return true;
+        }
+
+        private bool AreAllRelevantFormationPairsResolved()
+        {
+            for (var pairIndex = 0; pairIndex < _formationPairs.Count; pairIndex++)
+            {
+                var pair = _formationPairs[pairIndex];
+                var pairResolved = _formationPairs.Count == 1
+                    ? IsFormationResolved(pair.Left) || IsFormationResolved(pair.Right)
+                    : IsPairResolved(pair);
+                if (!pairResolved)
+                {
+                    return false;
+                }
+            }
+
+            for (var formationIndex = 0; formationIndex < _formations.Count; formationIndex++)
+            {
+                var formation = _formations[formationIndex];
+                if (!IsFormationInAnyPair(formation) && !IsFormationResolved(formation))
+                {
+                    return false;
+                }
+            }
+
+            return _formationPairs.Count > 0;
+        }
+
+        private bool IsFormationInAnyPair(MutableFormationState formation)
+        {
+            for (var pairIndex = 0; pairIndex < _formationPairs.Count; pairIndex++)
+            {
+                var pair = _formationPairs[pairIndex];
+                if (ReferenceEquals(pair.Left, formation) || ReferenceEquals(pair.Right, formation))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsFormationResolved(MutableFormationState formation)
+        {
+            return formation.State is BattleFormationState.Defeated or BattleFormationState.Retreated or BattleFormationState.Secured;
+        }
+
+        private static bool IsPairResolved(FormationPairState pair)
+        {
+            return IsFormationResolved(pair.Left) && IsFormationResolved(pair.Right);
+        }
+
+        private bool IsSideResolved(BattleSide side)
+        {
+            for (var squadIndex = 0; squadIndex < side.Squads.Count; squadIndex++)
+            {
+                var formation = FindFormation(side.Squads[squadIndex].Id);
+                if (formation.State is not (BattleFormationState.Defeated or BattleFormationState.Retreated or BattleFormationState.Secured))
+                {
+                    return false;
+                }
+            }
+
+            return side.Squads.Count > 0;
+        }
+
+        private BattleFormationState GetFirstResolvedState(BattleSide side)
+        {
+            for (var squadIndex = 0; squadIndex < side.Squads.Count; squadIndex++)
+            {
+                var state = FindFormation(side.Squads[squadIndex].Id).State;
+                if (state is BattleFormationState.Defeated or BattleFormationState.Retreated)
+                {
+                    return state;
+                }
+            }
+
+            return BattleFormationState.Defeated;
+        }
+
+        private string GetSideResolutionReason(BattleSide side, string sideLabel)
+        {
+            if (side.Squads.Count == 1)
+            {
+                return GetFirstResolvedState(side) == BattleFormationState.Defeated
+                    ? $"{sideLabel} formation was defeated"
+                    : $"{sideLabel} formation completed retreat";
+            }
+
+            return $"{sideLabel} formations were defeated or completed retreat";
         }
 
         private BattleResolution Finish(
@@ -549,9 +737,12 @@ public static class AuthoritativeBattleResolver
             bool isTerminal,
             string reason)
         {
-            if (_contactActive)
+            for (var pairIndex = 0; pairIndex < _formationPairs.Count; pairIndex++)
             {
-                EndContact(tick, isTerminal ? "battle_terminal_state_left_contact" : "safety_cap_ended_contact_tracking");
+                EndContact(
+                    _formationPairs[pairIndex],
+                    tick,
+                    isTerminal ? "battle_terminal_state_left_contact" : "safety_cap_ended_contact_tracking");
             }
 
             AddEvent(
@@ -938,6 +1129,21 @@ public static class AuthoritativeBattleResolver
 
             public BattleUnitId? KilledByUnitId { get; set; }
 
+        }
+
+        private sealed class FormationPairState
+        {
+            public FormationPairState(MutableFormationState left, MutableFormationState right)
+            {
+                Left = left;
+                Right = right;
+            }
+
+            public MutableFormationState Left { get; }
+
+            public MutableFormationState Right { get; }
+
+            public bool ContactActive { get; set; }
         }
 
         private readonly record struct FrontRankPair(MutableUnitState Left, MutableUnitState Right);

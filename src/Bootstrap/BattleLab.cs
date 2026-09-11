@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -119,7 +120,9 @@ public partial class BattleLab : Node3D
     {
         ValidateProductionSceneStructure();
 
-        var fixtureInput = BattleFixtureFactory.CreateM1MeleeFixtureInput();
+        var fixtureInput = string.Equals(_arguments?.ScenarioId, BattleLabArguments.MultiFormationScenario, StringComparison.Ordinal)
+            ? M3MultiFormationFixtureFactory.CreateM3MultiFormationFixtureInput()
+            : BattleFixtureFactory.CreateM1MeleeFixtureInput();
         if (!BattleDefinition.TryCommit(fixtureInput, out var committedDefinition, out var validation) || committedDefinition is null)
         {
             throw new BattleDefinitionValidationException(validation);
@@ -324,6 +327,11 @@ public partial class BattleLab : Node3D
                                   watchedResult is not null &&
                                   resolutionIdentityShared &&
                                   _skipResult.IsExactlyEqualTo(watchedResult);
+        var sideA = definition?.GetSide(new BattleSideId("side.a"));
+        var sideB = definition?.GetSide(new BattleSideId("side.b"));
+        var formationCount = (sideA?.Squads.Count ?? 0) + (sideB?.Squads.Count ?? 0);
+        var sideAUnitCount = CountUnits(sideA);
+        var sideBUnitCount = CountUnits(sideB);
 
         return new BattleLabReport
         {
@@ -354,8 +362,13 @@ public partial class BattleLab : Node3D
             SurvivorCount = result?.Survivors.Count ?? 0,
             CasualtyCount = result?.Casualties.Count ?? 0,
             RetreatedUnitCount = result?.RetreatedUnits.Count ?? 0,
-            SideAUnitCount = definition is null ? 0 : definition.GetSide(new BattleSideId("side.a")).Squads[0].Members.Count,
-            SideBUnitCount = definition is null ? 0 : definition.GetSide(new BattleSideId("side.b")).Squads[0].Members.Count,
+            FormationCount = formationCount,
+            SideASquadCount = sideA?.Squads.Count ?? 0,
+            SideBSquadCount = sideB?.Squads.Count ?? 0,
+            SideAUnitCount = sideAUnitCount,
+            SideBUnitCount = sideBUnitCount,
+            FormationContactPairCount = transcript is null ? 0 : CountFormationContactPairs(transcript),
+            FormationKeyframeIdentityCount = transcript is null ? 0 : CountFormationKeyframeIdentities(transcript),
             TranscriptEventCount = transcript?.EventCount ?? 0,
             TranscriptKeyframeCount = transcript?.KeyframeCount ?? 0,
             TranscriptEventsConsumed = controller?.TranscriptEventsConsumed ?? 0,
@@ -394,6 +407,53 @@ public partial class BattleLab : Node3D
             FailureCategory = passed && _unexpectedErrors == 0 ? null : _failureCategory ?? "AcceptanceFailure",
             FailureMessage = passed && _unexpectedErrors == 0 ? null : _failureMessage ?? "BattleLab acceptance did not pass.",
         };
+    }
+
+    private static int CountUnits(BattleSide? side)
+    {
+        if (side is null)
+        {
+            return 0;
+        }
+
+        var count = 0;
+        for (var squadIndex = 0; squadIndex < side.Squads.Count; squadIndex++)
+        {
+            count += side.Squads[squadIndex].Members.Count;
+        }
+
+        return count;
+    }
+
+    private static int CountFormationContactPairs(BattleTranscript transcript)
+    {
+        var identities = new HashSet<string>(StringComparer.Ordinal);
+        for (var eventIndex = 0; eventIndex < transcript.Events.Count; eventIndex++)
+        {
+            var @event = transcript.Events[eventIndex];
+            if (@event.Type != BattleEventType.ContactStarted ||
+                !@event.SideId.HasValue || !@event.SquadId.HasValue ||
+                !@event.OtherSideId.HasValue || !@event.OtherSquadId.HasValue)
+            {
+                continue;
+            }
+
+            identities.Add($"{@event.SideId.Value.Value}|{@event.SquadId.Value.Value}|{@event.OtherSideId.Value.Value}|{@event.OtherSquadId.Value.Value}");
+        }
+
+        return identities.Count;
+    }
+
+    private static int CountFormationKeyframeIdentities(BattleTranscript transcript)
+    {
+        var identities = new HashSet<string>(StringComparer.Ordinal);
+        for (var keyframeIndex = 0; keyframeIndex < transcript.Keyframes.Count; keyframeIndex++)
+        {
+            var keyframe = transcript.Keyframes[keyframeIndex];
+            identities.Add($"{keyframe.SideId.Value}|{keyframe.SquadId.Value}");
+        }
+
+        return identities.Count;
     }
 
     private void RecordFailure(string category, string message, bool countAsUnexpectedError)

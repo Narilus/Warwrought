@@ -1,6 +1,6 @@
 # M3 — Battle System Expansion & Doctrine
 
-- **Status:** Active for planning; only M3.1 is **READY**. M3 implementation has not started.
+- **Status:** Active. M3.1 is **complete and accepted**; M3.2 is blocked pending DG-D. No later M3 implementation has started.
 - **Depends on:** Completed M0–M2, including M2's accepted direct/visible/exported-player evidence at `1bc56e6950aa65596cba29c10c03daf927f7213b`.
 - **Completes before:** M4 campaign/province work.
 - **Authority:** `DESIGN.md` §§11–12; `plans/implementation_plan.md` §§8 and 12 (DG-D, M3.1–M3.12); `AGENTS.md`; `deterministic-battle-authority`, `godot-2p5d-presentation`, and `godot-project-operations` skills.
@@ -36,8 +36,8 @@ Godot terrain, camera, Sprite3D views, effects, and playback only present the re
 
 | Packet | Status | Dependency | Scope |
 | --- | --- | --- | --- |
-| [M3.1 Multi-formation authoritative foundation](M3.1_multi-formation-authoritative-foundation.md) | **READY** | M2 complete | Three formations per side, independent anchors/contact/targets/morale, retained resolver/transcript/playback compatibility. |
-| M3.2 Doctrine, targeting, and formation-v1 behaviour | Planned — **blocked by DG-D** | M3.1 + DG-D | Supported stances, target priorities, hold/advance/limited chase semantics, required formation variants, explainable stable candidate scoring. Add a spatial index only if M3.1 or later representative evidence shows a concrete query bottleneck. |
+| [M3.1 Multi-formation authoritative foundation](M3.1_multi-formation-authoritative-foundation.md) | **Complete — accepted** | M2 complete | Accepted three-formations-per-side foundation with independent anchors, fixed provisional pairs, pair-local combat, formation-local morale/rout/retreat, retained resolution, and production playback. The terminal-aggregation repair requires all formations to reach terminal-ready paired outcomes; independent re-review and human-visible Forward+ acceptance passed. |
+| M3.2 Doctrine, targeting, and formation-v1 behaviour | **Blocked — pending DG-D** | M3.1 complete + DG-D | Supported stances, target priorities, hold/advance/limited chase semantics, required formation variants, explainable stable candidate scoring. Add a spatial index only if M3.1 or later representative evidence shows a concrete query bottleneck. |
 | M3.3 Authoritative ranged combat | Planned | M3.2 | One ranged role and authoritative range/cooldown/outcome plus semantic projectile event; presentation-only tracer/impact, never collision physics. |
 | M3.4 Abilities, commanders, and representative morale | Planned — **blocked by DG-D and Morale v1 decision** | M3.3 + decisions | Explicit supported effects, deterministic ability policies, commander relationship/death event, and reason-coded morale refinement. |
 | M3.5 Inspection, fixture matrix, and M3 gate | Planned | M3.2–M3.4 | Selection/explainability surface, representative fixtures, real authoritative 300v300 proof, direct/visible/exported-player gate. |
@@ -75,4 +75,3 @@ M3 is complete only when at least three squads per side execute distinct approve
 - M1 canonical input/transcript/result digests remain `65ff279dac01cc31305336485af41cb595c37137edd25e04753aa5c62ec84787`, `75dc2d6f0dda9fc71c364a5c265f1c640ce7bc949435f7522dc08896272faf58`, and `7faa2ec40c0830f317f4c87296c2e54c27d6f43def9b18f92d113834e982da1c`; retain `SideAWin`, tick `576`, survivors `100`, casualties `28`, retreated `49`, `resolutionIdentityShared=true`, and `skipWatchEquivalent=true`.
 - M2.1 battlefield digests remain meadow `567f72c3d9e754722839fb8f1fb034fea7d9f647bc66690a36416ed0e7dc5443` and highland `5973015037208b1d09e4d50be3e0353b3bf200dd06fd1a1ccdf77ec4f691326f`; M2.2 scatter digests remain meadow `adda947b93cd28b4d1170138d5538b419dc4237efcc70f6f19b8baa516c863e6` and highland `9a12bd67baf35b084e0fc6c0ee8fa22c6bc9e40ea8706f359d7d239fb3d83d83`.
 - The accepted M2 presentation baseline remains production low-poly terrain, sampler projection, authored foliage, FixedY troop/foliage/remains billboards, full-facing hit effects, and the orthographic camera at `Vector3(42, 30, 26)`, `Vector3(-36, 58, 0)`, size `60`.
-

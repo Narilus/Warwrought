@@ -281,9 +281,9 @@ public partial class BattlePlaybackController : Node
             }
         }
 
-        if (startKeyframes.Count != 2)
+        if (startKeyframes.Count <= 0)
         {
-            throw new InvalidOperationException($"BattleLab requires two transcript start keyframes; observed {startKeyframes.Count}.");
+            throw new InvalidOperationException("BattleLab requires at least one transcript start keyframe.");
         }
 
         for (var keyframeIndex = 0; keyframeIndex < startKeyframes.Count; keyframeIndex++)

@@ -11,6 +11,7 @@ namespace Warwrought.Bootstrap;
 public sealed class BattleLabArguments
 {
     public const string AcceptanceScenario = "battlelab.m1.melee";
+    public const string MultiFormationScenario = "battlelab.m3.multiformation";
     public const string OpenMeadowScenario = "battlelab.m2.open-meadow";
     public const string BroadHighlandScenario = "battlelab.m2.broad-highland";
     public const string OpenMeadowProfile = "battlefield.m2.open-meadow";
@@ -119,9 +120,10 @@ public sealed class BattleLabArguments
         }
         else if (!string.Equals(scenarioId, AcceptanceScenario, StringComparison.Ordinal) &&
                  !string.Equals(scenarioId, OpenMeadowScenario, StringComparison.Ordinal) &&
-                 !string.Equals(scenarioId, BroadHighlandScenario, StringComparison.Ordinal))
+                 !string.Equals(scenarioId, BroadHighlandScenario, StringComparison.Ordinal) &&
+                 !string.Equals(scenarioId, MultiFormationScenario, StringComparison.Ordinal))
         {
-            errors.Add($"Unsupported acceptance scenario '{scenarioId}'. Expected '{AcceptanceScenario}', '{OpenMeadowScenario}', or '{BroadHighlandScenario}'.");
+            errors.Add($"Unsupported acceptance scenario '{scenarioId}'. Expected '{AcceptanceScenario}', '{OpenMeadowScenario}', '{BroadHighlandScenario}', or '{MultiFormationScenario}'.");
         }
 
         var isM2Scenario = string.Equals(scenarioId, OpenMeadowScenario, StringComparison.Ordinal) ||

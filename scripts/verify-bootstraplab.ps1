@@ -77,6 +77,10 @@ else {
                     $verifiedScenario = 'battlelab.m1.melee'
                     $verifiedScene = 'BattleLab'
                 }
+                'battlelab.m3.multiformation' {
+                    $verifiedScenario = 'battlelab.m3.multiformation'
+                    $verifiedScene = 'BattleLab'
+                }
                 'battlelab.m2.open-meadow' {
                     $verifiedScenario = 'battlelab.m2.open-meadow'
                     $verifiedScene = 'BattleLab'
@@ -142,6 +146,7 @@ else {
         }
 
         if ($verifiedScenario -eq 'battlelab.m1.melee' -or
+            $verifiedScenario -eq 'battlelab.m3.multiformation' -or
             $verifiedScenario -eq 'battlelab.m2.open-meadow' -or
             $verifiedScenario -eq 'battlelab.m2.broad-highland') {
             $battlelabRequiredProperties = @(
@@ -173,23 +178,91 @@ else {
                 }
             }
 
-            $expectedBattleLabValues = @{
-                battleId = 'battle.m1.melee.fixture'
-                seed = 82741
-                simulationVersion = '1.0'
-                authoritativeInputDigest = '65ff279dac01cc31305336485af41cb595c37137edd25e04753aa5c62ec84787'
-                transcriptDigest = '75dc2d6f0dda9fc71c364a5c265f1c640ce7bc949435f7522dc08896272faf58'
-                resultDigest = '7faa2ec40c0830f317f4c87296c2e54c27d6f43def9b18f92d113834e982da1c'
-                digest = '7faa2ec40c0830f317f4c87296c2e54c27d6f43def9b18f92d113834e982da1c'
-                result = 'SideAWin'
-                terminalTick = 576
-                survivorCount = 100
-                casualtyCount = 28
-                retreatedUnitCount = 49
-                skipResultDigest = '7faa2ec40c0830f317f4c87296c2e54c27d6f43def9b18f92d113834e982da1c'
-                watchedResultDigest = '7faa2ec40c0830f317f4c87296c2e54c27d6f43def9b18f92d113834e982da1c'
-                skipResult = 'SideAWin'
-                watchedResult = 'SideAWin'
+            $expectedBattleLabValues = if ($verifiedScenario -eq 'battlelab.m3.multiformation') {
+                @{
+                    battleId = 'battle.m3.multiformation.fixture'
+                    seed = 83101
+                    simulationVersion = '1.0'
+                }
+            }
+            else {
+                @{
+                    battleId = 'battle.m1.melee.fixture'
+                    seed = 82741
+                    simulationVersion = '1.0'
+                    authoritativeInputDigest = '65ff279dac01cc31305336485af41cb595c37137edd25e04753aa5c62ec84787'
+                    transcriptDigest = '75dc2d6f0dda9fc71c364a5c265f1c640ce7bc949435f7522dc08896272faf58'
+                    resultDigest = '7faa2ec40c0830f317f4c87296c2e54c27d6f43def9b18f92d113834e982da1c'
+                    digest = '7faa2ec40c0830f317f4c87296c2e54c27d6f43def9b18f92d113834e982da1c'
+                    result = 'SideAWin'
+                    terminalTick = 576
+                    survivorCount = 100
+                    casualtyCount = 28
+                    retreatedUnitCount = 49
+                    skipResultDigest = '7faa2ec40c0830f317f4c87296c2e54c27d6f43def9b18f92d113834e982da1c'
+                    watchedResultDigest = '7faa2ec40c0830f317f4c87296c2e54c27d6f43def9b18f92d113834e982da1c'
+                    skipResult = 'SideAWin'
+                    watchedResult = 'SideAWin'
+                }
+            }
+
+            if ($verifiedScenario -eq 'battlelab.m3.multiformation') {
+                $m3RequiredProperties = @(
+                    'formationCount',
+                    'sideASquadCount',
+                    'sideBSquadCount',
+                    'formationContactPairCount',
+                    'formationKeyframeIdentityCount',
+                    'sideAUnitCount',
+                    'sideBUnitCount',
+                    'unitsSpawned',
+                    'contactEventsPresented',
+                    'attackEventsPresented',
+                    'damageEventsPresented',
+                    'deathEventsPresented',
+                    'routedFormationsShown',
+                    'battlefieldProfile',
+                    'battlefieldSeed',
+                    'battlefieldDigest',
+                    'projectedUnitCount',
+                    'projectedRemainsCount',
+                    'projectedEffectCount',
+                    'cameraOrthographic',
+                    'cameraPanOperations',
+                    'cameraZoomOperations',
+                    'cameraResetOperations',
+                    'cameraControlsObserved'
+                )
+                foreach ($requiredProperty in $m3RequiredProperties) {
+                    if (-not (Has-Property $report $requiredProperty)) {
+                        Add-Failure "M3 BattleLab runtime report is missing $requiredProperty."
+                    }
+                }
+
+                foreach ($expectedPair in @(
+                    @('formationCount', 6),
+                    @('sideASquadCount', 3),
+                    @('sideBSquadCount', 3),
+                    @('formationKeyframeIdentityCount', 6),
+                    @('sideAUnitCount', 192),
+                    @('sideBUnitCount', 192),
+                    @('unitsSpawned', 384),
+                    @('battlefieldProfile', 'battlefield.m2.open-meadow'),
+                    @('battlefieldSeed', [ulong]5562593449599061847),
+                    @('battlefieldDigest', '567f72c3d9e754722839fb8f1fb034fea7d9f647bc66690a36416ed0e7dc5443')
+                )) {
+                    if ((Has-Property $report $expectedPair[0]) -and [string]$report.($expectedPair[0]) -ne [string]$expectedPair[1]) {
+                        Add-Failure "M3 BattleLab runtime report $($expectedPair[0]) '$($report.($expectedPair[0]))' does not match expected '$($expectedPair[1])'."
+                    }
+                }
+
+                foreach ($positiveProperty in @('formationContactPairCount', 'contactEventsPresented', 'attackEventsPresented', 'damageEventsPresented', 'deathEventsPresented', 'routedFormationsShown', 'projectedUnitCount', 'projectedRemainsCount', 'projectedEffectCount', 'cameraPanOperations', 'cameraZoomOperations', 'cameraResetOperations')) {
+                    if ((Has-Property $report $positiveProperty) -and [double]$report.$positiveProperty -le 0) {
+                        Add-Failure "M3 BattleLab runtime report $positiveProperty must be positive."
+                    }
+                }
+                if ((Has-Property $report 'cameraOrthographic') -and $report.cameraOrthographic -ne $true) { Add-Failure 'M3 BattleLab camera must report orthographic projection.' }
+                if ((Has-Property $report 'cameraControlsObserved') -and $report.cameraControlsObserved -ne $true) { Add-Failure 'M3 BattleLab camera controls were not observed.' }
             }
 
             if ($verifiedScenario -eq 'battlelab.m2.open-meadow' -or $verifiedScenario -eq 'battlelab.m2.broad-highland') {
